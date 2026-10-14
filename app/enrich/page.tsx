@@ -419,14 +419,14 @@ export default function LiveEnrichPage() {
       </div>
 
       {/* Main Input Form Card */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm">
+      <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] p-5 shadow-sm space-y-4">
         <form onSubmit={handleEnrich} className="space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-              <Search className="h-4 w-4 text-cyan-400" />
+            <label className="text-sm font-medium text-zinc-200 flex items-center gap-2">
+              <Search className="h-4 w-4 text-zinc-400" />
               <span>IP Indicators (Single or Bulk)</span>
               {detectedIps.length > 0 && (
-                <span className="rounded-full bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 text-[11px] font-mono text-cyan-300">
+                <span className="rounded-full bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 text-[11px] font-mono text-zinc-300">
                   {detectedIps.length} {detectedIps.length === 1 ? 'indicator' : 'indicators'} detected
                 </span>
               )}
@@ -436,19 +436,19 @@ export default function LiveEnrichPage() {
               <button
                 type="button"
                 onClick={handleLoadSample}
-                className="text-xs font-mono text-slate-400 hover:text-cyan-400 transition cursor-pointer"
+                className="text-xs font-mono text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
               >
                 Load Sample
               </button>
-              <span className="text-slate-700">|</span>
+              <span className="text-zinc-700">|</span>
               <button
                 type="button"
                 onClick={() => setInputText('')}
-                className="text-xs font-mono text-slate-400 hover:text-red-400 transition cursor-pointer"
+                className="text-xs font-mono text-zinc-400 hover:text-red-400 transition cursor-pointer"
               >
                 Clear
               </button>
-              <span className="text-slate-700">|</span>
+              <span className="text-zinc-700">|</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -459,7 +459,7 @@ export default function LiveEnrichPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1 text-xs font-mono text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs font-mono text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
               >
                 <Upload className="h-3 w-3" />
                 Upload File
@@ -472,32 +472,32 @@ export default function LiveEnrichPage() {
             onChange={(e) => setInputText(e.target.value)}
             rows={4}
             placeholder="Paste 1 IP or multiple IPs here (separated by newlines, spaces, or commas)&#10;e.g.&#10;195.201.245.94&#10;98.86.120.236&#10;18.212.115.217"
-            className="w-full rounded-lg border border-slate-800 bg-slate-950/80 p-3 font-mono text-xs text-slate-200 placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition"
+            className="w-full rounded-lg border border-white/[0.1] bg-[#141824] p-3 font-mono text-xs text-zinc-100 placeholder-zinc-500 focus:border-white/[0.25] focus:outline-none focus:ring-1 focus:ring-white/[0.15] transition"
           />
 
           {/* Options Toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-slate-800/50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-white/[0.06]">
             <div className="flex flex-wrap items-center gap-4">
               {/* Check Cache First Toggle */}
-              <label className="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={checkCacheFirst}
                   onChange={(e) => setCheckCacheFirst(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900"
+                  className="rounded border-white/[0.15] bg-[#141824] text-zinc-200 focus:ring-0 accent-zinc-300"
                 />
                 <span className="flex items-center gap-1.5">
-                  <Database className="h-3.5 w-3.5 text-cyan-400" />
+                  <Database className="h-3.5 w-3.5 text-zinc-400" />
                   Check DB Cache First
                 </span>
-                <span className="text-[11px] text-slate-500 hidden sm:inline">(Saves API quota if already cached)</span>
+                <span className="text-[11px] text-zinc-500 hidden sm:inline">(Saves API quota if already cached)</span>
               </label>
 
               {/* Custom API Key Accordion Button */}
               <button
                 type="button"
                 onClick={() => setShowKeyInput(!showKeyInput)}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition cursor-pointer font-mono"
+                className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition cursor-pointer font-mono"
               >
                 <Key className="h-3.5 w-3.5 text-amber-400" />
                 <span>Custom API Key</span>
@@ -510,7 +510,7 @@ export default function LiveEnrichPage() {
               <button
                 type="submit"
                 disabled={loading || detectedIps.length === 0}
-                className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white border border-white/[0.12] px-5 py-2 text-xs font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -519,7 +519,7 @@ export default function LiveEnrichPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                     <span>Lookup & Enrich ({detectedIps.length || 0})</span>
                   </>
                 )}
@@ -611,35 +611,35 @@ export default function LiveEnrichPage() {
             <span className="text-xl font-bold font-mono text-emerald-400 mt-1 block">{counts.clean}</span>
           </div>
 
-          <div className="rounded-xl border border-purple-900/30 bg-purple-950/10 p-3.5 backdrop-blur-sm">
-            <span className="text-[11px] font-mono text-purple-400 uppercase tracking-wider block flex items-center gap-1">
+          <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] p-3.5">
+            <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block flex items-center gap-1">
               <Database className="h-3 w-3" /> Saved to DB
             </span>
-            <span className="text-xl font-bold font-mono text-purple-400 mt-1 block">{counts.saved}</span>
+            <span className="text-xl font-bold font-mono text-zinc-100 mt-1 block font-tabular">{counts.saved}</span>
           </div>
 
-          <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-3.5 backdrop-blur-sm">
-            <span className="text-[11px] font-mono text-cyan-400 uppercase tracking-wider block flex items-center gap-1">
+          <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] p-3.5">
+            <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3" /> Cache Hits
             </span>
-            <span className="text-xl font-bold font-mono text-cyan-400 mt-1 block">{counts.cached}</span>
+            <span className="text-xl font-bold font-mono text-zinc-100 mt-1 block font-tabular">{counts.cached}</span>
           </div>
         </div>
       )}
 
       {/* Results Section */}
       {results.length > 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 shadow-lg backdrop-blur-sm overflow-hidden">
+        <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] shadow-sm overflow-hidden">
           {/* Action Toolbar & Filters */}
-          <div className="border-b border-slate-800 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="border-b border-white/[0.06] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 font-mono">
             {/* Category Filter Tabs */}
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={() => setCategoryFilter('all')}
                 className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition cursor-pointer ${
                   categoryFilter === 'all'
-                    ? 'bg-slate-700 text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-white/[0.12] text-white border border-white/[0.12]'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
                 }`}
               >
                 All ({counts.total})
@@ -649,7 +649,7 @@ export default function LiveEnrichPage() {
                 className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition cursor-pointer ${
                   categoryFilter === 'malicious'
                     ? 'bg-red-950/80 text-red-300 border border-red-800'
-                    : 'text-slate-400 hover:text-red-400 hover:bg-slate-800'
+                    : 'text-zinc-400 hover:text-red-400 hover:bg-white/[0.04]'
                 }`}
               >
                 Malicious ({counts.malicious})
@@ -659,7 +659,7 @@ export default function LiveEnrichPage() {
                 className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition cursor-pointer ${
                   categoryFilter === 'suspicious'
                     ? 'bg-amber-950/80 text-amber-300 border border-amber-800'
-                    : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
+                    : 'text-zinc-400 hover:text-amber-400 hover:bg-white/[0.04]'
                 }`}
               >
                 Suspicious ({counts.suspicious})
@@ -669,7 +669,7 @@ export default function LiveEnrichPage() {
                 className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition cursor-pointer ${
                   categoryFilter === 'clean'
                     ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-                    : 'text-slate-400 hover:text-emerald-400 hover:bg-slate-800'
+                    : 'text-zinc-400 hover:text-emerald-400 hover:bg-white/[0.04]'
                 }`}
               >
                 Clean ({counts.clean})
@@ -678,8 +678,8 @@ export default function LiveEnrichPage() {
                 onClick={() => setCategoryFilter('saved')}
                 className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition cursor-pointer ${
                   categoryFilter === 'saved'
-                    ? 'bg-purple-950/80 text-purple-300 border border-purple-800'
-                    : 'text-slate-400 hover:text-purple-400 hover:bg-slate-800'
+                    ? 'bg-white/[0.12] text-white border border-white/[0.12]'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 New Saved ({counts.saved})
@@ -688,8 +688,8 @@ export default function LiveEnrichPage() {
                 onClick={() => setCategoryFilter('cached')}
                 className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition cursor-pointer ${
                   categoryFilter === 'cached'
-                    ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800'
-                    : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'
+                    ? 'bg-white/[0.12] text-white border border-white/[0.12]'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 Cached ({counts.cached})
@@ -700,13 +700,13 @@ export default function LiveEnrichPage() {
             <div className="flex flex-wrap items-center gap-2">
               {/* Search Filter */}
               <div className="relative">
-                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500" />
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-zinc-500" />
                 <input
                   type="text"
                   placeholder="Filter results..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="rounded-md border border-slate-700 bg-slate-950/80 py-1 pl-8 pr-2.5 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  className="rounded-md border border-white/[0.08] bg-[#141824] py-1 pl-8 pr-2.5 font-mono text-xs text-zinc-200 placeholder-zinc-500 focus:border-white/[0.25] focus:outline-none"
                 />
               </div>
 
@@ -715,24 +715,24 @@ export default function LiveEnrichPage() {
                 onClick={() => setDefangAll(!defangAll)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition cursor-pointer border ${
                   defangAll
-                    ? 'border-cyan-700 bg-cyan-950/60 text-cyan-300'
-                    : 'border-slate-700 bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                    ? 'border-white/[0.2] bg-white/[0.1] text-white'
+                    : 'border-white/[0.08] bg-[#141824] text-zinc-400 hover:text-zinc-200'
                 }`}
                 title="Toggle defanged display for all IPs"
               >
-                <ShieldCheck className="h-3.5 w-3.5 text-cyan-400" />
+                <ShieldCheck className="h-3.5 w-3.5 text-zinc-400" />
                 <span>Defang [.]</span>
               </button>
 
               {/* Copy Alpha Reporter IoC */}
               <button
                 onClick={() => copyToClipboard(formattedIocMarkdown, 'ioc')}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-white/[0.12] hover:bg-white/[0.18] text-white border border-white/[0.12] shadow-sm transition cursor-pointer"
                 title="Copy markdown table for Alpha Reporter incident report"
               >
                 {copiedIoc ? (
                   <>
-                    <Check className="h-3.5 w-3.5 text-white" />
+                    <Check className="h-3.5 w-3.5 text-emerald-300" />
                     <span>Copied IoC (.md)</span>
                   </>
                 ) : (
@@ -746,17 +746,17 @@ export default function LiveEnrichPage() {
               {/* Export CSV */}
               <button
                 onClick={handleExportCsv}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono border border-white/[0.08] bg-[#141824] hover:bg-white/[0.06] text-zinc-200 transition cursor-pointer"
                 title="Download CSV report"
               >
-                <Download className="h-3.5 w-3.5 text-slate-400" />
+                <Download className="h-3.5 w-3.5 text-zinc-400" />
                 <span>Export CSV</span>
               </button>
 
               {/* Preview Modal Button */}
               <button
                 onClick={() => setShowIocPreview(true)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono border border-white/[0.08] bg-[#141824] hover:bg-white/[0.06] text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
                 title="Preview IoC Markdown"
               >
                 <Eye className="h-3.5 w-3.5" />
@@ -769,18 +769,18 @@ export default function LiveEnrichPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/60 font-mono text-[11px] text-slate-400 uppercase tracking-wider">
+                <tr className="border-b border-white/[0.06] bg-[#141824] font-mono text-[11px] text-zinc-400 uppercase tracking-wider">
                   <th className="py-3 px-4 w-10 text-center">
                     <button
                       type="button"
                       onClick={handleSelectAll}
-                      className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
+                      className="cursor-pointer text-zinc-400 hover:text-white transition"
                       title={allFilteredSelected ? 'Deselect all' : 'Select all'}
                     >
                       {allFilteredSelected ? (
-                        <CheckSquare className="h-4 w-4 text-cyan-400" />
+                        <CheckSquare className="h-4 w-4 text-white" />
                       ) : someFilteredSelected ? (
-                        <MinusSquare className="h-4 w-4 text-cyan-400" />
+                        <MinusSquare className="h-4 w-4 text-zinc-300" />
                       ) : (
                         <Square className="h-4 w-4" />
                       )}
@@ -790,11 +790,11 @@ export default function LiveEnrichPage() {
                   <th className="py-3 px-3">
                     <button
                       onClick={() => toggleSort('ip')}
-                      className="inline-flex items-center gap-1 hover:text-slate-200 transition cursor-pointer"
+                      className="inline-flex items-center gap-1 hover:text-zinc-200 transition cursor-pointer"
                     >
                       <span>Indicator / IP</span>
                       {sortField === 'ip' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-cyan-400" /> : <ArrowDown className="h-3 w-3 text-cyan-400" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-zinc-300" /> : <ArrowDown className="h-3 w-3 text-zinc-300" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 opacity-40" />
                       )}
@@ -804,11 +804,11 @@ export default function LiveEnrichPage() {
                   <th className="py-3 px-3">
                     <button
                       onClick={() => toggleSort('score')}
-                      className="inline-flex items-center gap-1 hover:text-slate-200 transition cursor-pointer"
+                      className="inline-flex items-center gap-1 hover:text-zinc-200 transition cursor-pointer"
                     >
                       <span>Abuse Score / Verdict</span>
                       {sortField === 'score' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-cyan-400" /> : <ArrowDown className="h-3 w-3 text-cyan-400" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-zinc-300" /> : <ArrowDown className="h-3 w-3 text-zinc-300" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 opacity-40" />
                       )}
@@ -818,11 +818,11 @@ export default function LiveEnrichPage() {
                   <th className="py-3 px-3">
                     <button
                       onClick={() => toggleSort('reports')}
-                      className="inline-flex items-center gap-1 hover:text-slate-200 transition cursor-pointer"
+                      className="inline-flex items-center gap-1 hover:text-zinc-200 transition cursor-pointer"
                     >
                       <span>Reports</span>
                       {sortField === 'reports' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-cyan-400" /> : <ArrowDown className="h-3 w-3 text-cyan-400" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-zinc-300" /> : <ArrowDown className="h-3 w-3 text-zinc-300" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 opacity-40" />
                       )}
@@ -832,11 +832,11 @@ export default function LiveEnrichPage() {
                   <th className="py-3 px-3">
                     <button
                       onClick={() => toggleSort('country')}
-                      className="inline-flex items-center gap-1 hover:text-slate-200 transition cursor-pointer"
+                      className="inline-flex items-center gap-1 hover:text-zinc-200 transition cursor-pointer"
                     >
                       <span>Country</span>
                       {sortField === 'country' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-cyan-400" /> : <ArrowDown className="h-3 w-3 text-cyan-400" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-zinc-300" /> : <ArrowDown className="h-3 w-3 text-zinc-300" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 opacity-40" />
                       )}
@@ -846,11 +846,11 @@ export default function LiveEnrichPage() {
                   <th className="py-3 px-3">
                     <button
                       onClick={() => toggleSort('isp')}
-                      className="inline-flex items-center gap-1 hover:text-slate-200 transition cursor-pointer"
+                      className="inline-flex items-center gap-1 hover:text-zinc-200 transition cursor-pointer"
                     >
                       <span>ISP / Domain</span>
                       {sortField === 'isp' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-cyan-400" /> : <ArrowDown className="h-3 w-3 text-cyan-400" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-zinc-300" /> : <ArrowDown className="h-3 w-3 text-zinc-300" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 opacity-40" />
                       )}
@@ -860,11 +860,11 @@ export default function LiveEnrichPage() {
                   <th className="py-3 px-3">
                     <button
                       onClick={() => toggleSort('status')}
-                      className="inline-flex items-center gap-1 hover:text-slate-200 transition cursor-pointer"
+                      className="inline-flex items-center gap-1 hover:text-zinc-200 transition cursor-pointer"
                     >
                       <span>Status & DB</span>
                       {sortField === 'status' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-cyan-400" /> : <ArrowDown className="h-3 w-3 text-cyan-400" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-zinc-300" /> : <ArrowDown className="h-3 w-3 text-zinc-300" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 opacity-40" />
                       )}
@@ -874,10 +874,10 @@ export default function LiveEnrichPage() {
                   <th className="py-3 px-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-sans">
+              <tbody className="divide-y divide-white/[0.04] font-sans">
                 {sortedResults.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-500 font-mono text-xs">
+                    <td colSpan={8} className="py-8 text-center text-zinc-500 font-mono text-xs">
                       No indicators match the selected filter criteria.
                     </td>
                   </tr>
@@ -887,8 +887,8 @@ export default function LiveEnrichPage() {
                     const displayIp = defangAll ? defang(item.ip) : item.ip;
                     const score = item.abuseScore ?? 0;
 
-                    let badgeColor = 'bg-slate-800 text-slate-300 border-slate-700';
-                    let barColor = 'bg-slate-600';
+                    let badgeColor = 'bg-white/[0.06] text-zinc-300 border-white/[0.08]';
+                    let barColor = 'bg-zinc-600';
                     if (score >= 70) {
                       badgeColor = 'bg-red-950/80 text-red-300 border-red-800/80';
                       barColor = 'bg-red-500';
@@ -899,15 +899,15 @@ export default function LiveEnrichPage() {
                       badgeColor = 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80';
                       barColor = 'bg-emerald-500';
                     } else {
-                      badgeColor = 'bg-blue-950/80 text-blue-300 border-blue-800/80';
-                      barColor = 'bg-blue-500';
+                      badgeColor = 'bg-sky-950/80 text-sky-300 border-sky-800/80';
+                      barColor = 'bg-sky-500';
                     }
 
                     return (
                       <tr
                         key={item.ip}
-                        className={`transition hover:bg-slate-800/40 ${
-                          isSelected ? 'bg-cyan-950/20' : ''
+                        className={`transition hover:bg-white/[0.03] ${
+                          isSelected ? 'bg-white/[0.06]' : ''
                         }`}
                       >
                         {/* Checkbox */}
@@ -915,12 +915,12 @@ export default function LiveEnrichPage() {
                           <button
                             type="button"
                             onClick={() => toggleSelectIp(item.ip)}
-                            className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
+                            className="cursor-pointer text-zinc-400 hover:text-white transition"
                           >
                             {isSelected ? (
-                              <CheckSquare className="h-4 w-4 text-cyan-400" />
+                              <CheckSquare className="h-4 w-4 text-white" />
                             ) : (
-                              <Square className="h-4 w-4" />
+                              <Square className="h-4 w-4 text-zinc-600 hover:text-zinc-400" />
                             )}
                           </button>
                         </td>
@@ -930,7 +930,7 @@ export default function LiveEnrichPage() {
                           <div className="flex items-center gap-1.5">
                             <Link
                               href={`/ip/${encodeURIComponent(item.ip)}`}
-                              className="font-semibold text-slate-200 hover:text-cyan-400 hover:underline transition"
+                              className="font-semibold text-zinc-200 hover:text-white hover:underline transition"
                               title="View deep-dive SOC details"
                             >
                               {displayIp}
@@ -1010,8 +1010,8 @@ export default function LiveEnrichPage() {
                         {/* Status & DB */}
                         <td className="py-3 px-3 font-mono text-[11px]">
                           {item.source === 'cache' ? (
-                            <span className="inline-flex items-center gap-1 text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded">
-                              <Database className="h-3 w-3" /> Cache Hit
+                            <span className="inline-flex items-center gap-1 text-zinc-300 bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 rounded">
+                              <Database className="h-3 w-3 text-zinc-400" /> Cache Hit
                             </span>
                           ) : item.savedToDb ? (
                             <span className="inline-flex items-center gap-1 text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2 py-0.5 rounded">
@@ -1036,10 +1036,10 @@ export default function LiveEnrichPage() {
 
                         {/* Row Actions */}
                         <td className="py-3 px-3 text-right">
-                          <div className="inline-flex items-center gap-1">
+                          <div className="inline-flex items-center gap-1 font-mono">
                             <button
                               onClick={() => copySingle(item.ip, item.ip)}
-                              className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
+                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer"
                               title="Copy raw IP"
                             >
                               {copiedSingleIp === item.ip ? (
@@ -1051,7 +1051,7 @@ export default function LiveEnrichPage() {
 
                             <Link
                               href={`/ip/${encodeURIComponent(item.ip)}`}
-                              className="p-1 rounded text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition cursor-pointer"
+                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer"
                               title="Open detail page"
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
@@ -1070,42 +1070,42 @@ export default function LiveEnrichPage() {
 
       {/* IoC Markdown Preview Modal */}
       {showIocPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-4xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between border-b border-slate-800 p-4">
-              <div className="flex items-center gap-2 text-cyan-400 font-mono text-sm">
-                <FileText className="h-4 w-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-sans">
+          <div className="w-full max-w-4xl rounded-xl border border-white/[0.08] bg-[#0e111a] shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
+              <div className="flex items-center gap-2 text-zinc-100 font-mono text-sm">
+                <FileText className="h-4 w-4 text-zinc-400" />
                 <span>Alpha Reporter IoC Markdown Preview</span>
               </div>
               <button
                 onClick={() => setShowIocPreview(false)}
-                className="rounded p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
+                className="rounded p-1 text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-4 overflow-y-auto font-mono text-xs text-slate-300 bg-slate-950/80 m-4 rounded-lg border border-slate-800 whitespace-pre">
+            <div className="p-4 overflow-y-auto font-mono text-xs text-zinc-200 bg-[#141824] m-4 rounded-lg border border-white/[0.06] whitespace-pre">
               {formattedIocMarkdown}
             </div>
 
-            <div className="border-t border-slate-800 p-4 flex items-center justify-between">
-              <span className="text-xs text-slate-400">
+            <div className="border-t border-white/[0.06] p-4 flex items-center justify-between font-sans">
+              <span className="text-xs text-zinc-400 font-mono">
                 {selectedIps.size > 0
                   ? `Showing ${selectedIps.size} selected indicators`
                   : `Showing all ${results.length} indicators`}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 font-mono">
                 <button
                   onClick={() => copyToClipboard(formattedIocMarkdown, 'ioc')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-semibold text-white transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] border border-white/[0.12] text-xs font-semibold text-white transition cursor-pointer shadow-sm"
                 >
-                  {copiedIoc ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copiedIoc ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
                   <span>{copiedIoc ? 'Copied to Clipboard!' : 'Copy Markdown'}</span>
                 </button>
                 <button
                   onClick={() => setShowIocPreview(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 transition cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-[#141824] hover:bg-white/[0.06] border border-white/[0.08] text-xs text-zinc-300 hover:text-white transition cursor-pointer"
                 >
                   Close
                 </button>

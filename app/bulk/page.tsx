@@ -414,14 +414,14 @@ export default function BulkLookupPage() {
       </div>
 
       {/* Input Section */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-5 space-y-4 shadow-sm">
+      <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] p-5 space-y-4 shadow-sm">
         <form onSubmit={handleLookup} className="space-y-4">
           <div>
-            <div className="flex items-center justify-between mb-2 text-xs">
-              <label className="font-medium text-slate-300">
+            <div className="flex items-center justify-between mb-2 text-xs font-sans">
+              <label className="font-medium text-zinc-300">
                 Enter IPs (separated by newlines or commas, max 200)
               </label>
-              <label className="cursor-pointer text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition">
+              <label className="cursor-pointer text-zinc-400 hover:text-white flex items-center gap-1.5 transition">
                 <Upload className="h-3.5 w-3.5" />
                 <span>Upload CSV / TXT</span>
                 <input
@@ -437,7 +437,7 @@ export default function BulkLookupPage() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="185.220.101.5&#10;45.154.255.89&#10;194.26.29.112&#10;8.8.8.8"
-              className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-xs text-slate-100 placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition"
+              className="w-full rounded-lg border border-white/[0.1] bg-[#141824] p-3 font-mono text-xs text-zinc-100 placeholder-zinc-500 focus:border-white/[0.25] focus:outline-none focus:ring-1 focus:ring-white/[0.15] transition"
             />
           </div>
 
@@ -449,13 +449,13 @@ export default function BulkLookupPage() {
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-slate-500 font-mono">
+            <span className="text-[11px] text-zinc-500 font-mono">
               Duplicates and invalid IPs are automatically filtered
             </span>
             <button
               type="submit"
               disabled={loading || !inputText.trim()}
-              className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-xs font-semibold text-white shadow hover:bg-cyan-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed transition"
+              className="inline-flex items-center gap-2 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white border border-white/[0.12] px-5 py-2.5 text-xs font-semibold shadow-sm disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed transition"
             >
               <Search className="h-3.5 w-3.5" />
               <span>{loading ? 'Analyzing batch...' : 'Analyze Batch'}</span>
@@ -466,40 +466,40 @@ export default function BulkLookupPage() {
 
       {/* Results Section */}
       {results.length > 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-5 space-y-4 shadow-sm">
+        <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] p-5 space-y-4 shadow-sm">
           {/* Section Header & Primary Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-4 gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/[0.06] pb-4 gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
                 <span>Batch Results</span>
-                <span className="rounded bg-cyan-950 px-2 py-0.5 text-[10px] font-mono text-cyan-400 border border-cyan-800/40">
+                <span className="rounded bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-zinc-300 border border-white/[0.08]">
                   {results.length} Evaluated
                 </span>
                 {selectedIps.size > 0 && (
-                  <span className="rounded bg-purple-950 px-2 py-0.5 text-[10px] font-mono text-purple-300 border border-purple-800/40 animate-pulse">
+                  <span className="rounded bg-white/[0.1] px-2 py-0.5 text-[10px] font-mono text-white border border-white/[0.15]">
                     {selectedIps.size} Selected
                   </span>
                 )}
               </h2>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 font-mono">
               {/* Preview & Customize Modal Button */}
               <button
                 onClick={() => {
                   setPreviewScope(selectedIps.size > 0 ? 'selected' : 'all');
                   setShowPreview(true);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer transition"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#141824] px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/[0.06] hover:text-white cursor-pointer transition"
                 title="Preview and customize Alpha Reporter IoC Markdown"
               >
-                <Eye className="h-3.5 w-3.5 text-slate-400" />
+                <Eye className="h-3.5 w-3.5 text-zinc-400" />
                 <span>Preview .md</span>
               </button>
 
               {/* Main Copy Alpha IoC .md Button */}
               <button
                 onClick={() => handleCopyAlphaIoc()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-700 bg-gradient-to-r from-cyan-950 to-blue-950 px-3.5 py-1.5 text-xs font-semibold text-cyan-300 hover:from-cyan-900 hover:to-blue-900 hover:text-white cursor-pointer transition shadow-sm"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.12] bg-[#141824] px-3.5 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/[0.08] hover:text-white cursor-pointer transition shadow-sm"
                 title="Copy all evaluated IoCs in official Alpha Reporter Section 2 format"
               >
                 {copiedIoc ? (
@@ -509,7 +509,7 @@ export default function BulkLookupPage() {
                   </>
                 ) : (
                   <>
-                    <FileText className="h-3.5 w-3.5 text-cyan-400" />
+                    <FileText className="h-3.5 w-3.5 text-zinc-400" />
                     <span>Copy Alpha IoC (.md)</span>
                   </>
                 )}
@@ -518,10 +518,10 @@ export default function BulkLookupPage() {
               {/* Export CSV Button */}
               <button
                 onClick={() => handleExportCsv()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer transition"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#141824] px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/[0.06] hover:text-white cursor-pointer transition"
                 title="Export all evaluated IPs to CSV"
               >
-                <Download className="h-3.5 w-3.5 text-cyan-400" />
+                <Download className="h-3.5 w-3.5 text-zinc-400" />
                 <span>Export CSV</span>
               </button>
             </div>
@@ -530,9 +530,9 @@ export default function BulkLookupPage() {
           {/* Category Filter Chips & Quick Select Presets */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
             {/* Filter Tabs */}
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-slate-400 font-mono text-[11px] mr-1 flex items-center gap-1">
-                <Filter className="h-3 w-3 text-slate-500" />
+            <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+              <span className="text-zinc-500 font-sans text-[11px] mr-1 flex items-center gap-1">
+                <Filter className="h-3 w-3 text-zinc-500" />
                 Filter:
               </span>
 
@@ -541,8 +541,8 @@ export default function BulkLookupPage() {
                 onClick={() => setCategoryFilter('all')}
                 className={`rounded-lg px-2.5 py-1 text-xs font-mono transition cursor-pointer flex items-center gap-1.5 ${
                   categoryFilter === 'all'
-                    ? 'bg-cyan-600 text-white font-semibold shadow'
-                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                    ? 'bg-white/[0.12] text-white font-semibold border border-white/[0.12]'
+                    : 'bg-[#141824] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
                 }`}
               >
                 <span>All</span>
@@ -627,12 +627,12 @@ export default function BulkLookupPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search IP, ISP, country..."
-                className="w-full rounded-lg border border-slate-800 bg-slate-950 pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition"
+                className="w-full rounded-lg border border-white/[0.08] bg-[#141824] pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:border-white/[0.25] focus:outline-none focus:ring-1 focus:ring-white/[0.15] transition"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -641,33 +641,33 @@ export default function BulkLookupPage() {
           </div>
 
           {/* Quick Select Presets Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs py-1 border-t border-slate-800/60">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-slate-400 font-mono text-[11px] mr-1 flex items-center gap-1">
-                <Sparkles className="h-3 w-3 text-cyan-400" />
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs py-1 border-t border-white/[0.06]">
+            <div className="flex flex-wrap items-center gap-1.5 font-mono">
+              <span className="text-zinc-500 font-sans text-[11px] mr-1 flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-amber-400" />
                 Quick Select:
               </span>
               <button
                 onClick={() => handleQuickSelectPreset('malicious')}
-                className="rounded border border-red-800/60 bg-red-950/40 px-2 py-0.5 text-[11px] font-mono text-red-300 hover:bg-red-900/60 cursor-pointer transition"
+                className="rounded border border-red-800/60 bg-red-950/30 px-2 py-0.5 text-[11px] font-mono text-red-300 hover:bg-red-900/40 cursor-pointer transition"
               >
                 + Select Malicious ({counts.malicious})
               </button>
               <button
                 onClick={() => handleQuickSelectPreset('suspicious')}
-                className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 cursor-pointer transition"
+                className="rounded border border-amber-800/60 bg-amber-950/30 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/40 cursor-pointer transition"
               >
                 + Select Suspicious ({counts.suspicious})
               </button>
               <button
                 onClick={() => handleQuickSelectPreset('not_enriched')}
-                className="rounded border border-purple-800/60 bg-purple-950/40 px-2 py-0.5 text-[11px] font-mono text-purple-300 hover:bg-purple-900/60 cursor-pointer transition"
+                className="rounded border border-white/[0.08] bg-[#141824] px-2 py-0.5 text-[11px] font-mono text-zinc-300 hover:bg-white/[0.06] cursor-pointer transition"
               >
                 + Select Not Enriched ({counts.notEnriched})
               </button>
               <button
                 onClick={() => handleQuickSelectPreset('all')}
-                className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] font-mono text-slate-300 hover:bg-slate-700 cursor-pointer transition"
+                className="rounded border border-white/[0.08] bg-[#141824] px-2 py-0.5 text-[11px] font-mono text-zinc-300 hover:bg-white/[0.06] cursor-pointer transition"
               >
                 + Select All ({counts.all})
               </button>
@@ -676,7 +676,7 @@ export default function BulkLookupPage() {
             {selectedIps.size > 0 && (
               <button
                 onClick={handleClearSelection}
-                className="text-[11px] font-mono text-slate-400 hover:text-slate-200 cursor-pointer flex items-center gap-1"
+                className="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 cursor-pointer flex items-center gap-1"
               >
                 <X className="h-3 w-3" />
                 <span>Clear Selection ({selectedIps.size})</span>
@@ -686,36 +686,36 @@ export default function BulkLookupPage() {
 
           {/* DEDICATED SELECTION ACTION BAR (Visible when >= 1 row selected) */}
           {selectedIps.size > 0 && (
-            <div className="rounded-xl border border-cyan-500/50 bg-gradient-to-r from-slate-900 via-cyan-950/40 to-slate-900 p-3 shadow-lg shadow-cyan-950/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="rounded-xl border border-white/[0.12] bg-[#141824] p-3 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white">
                   <CheckSquare className="h-3.5 w-3.5" />
                 </span>
                 <div>
-                  <span className="text-xs font-semibold text-slate-100 font-mono">
+                  <span className="text-xs font-semibold text-zinc-100 font-mono">
                     {selectedIps.size} IP(s) Selected
                   </span>
-                  <span className="text-[11px] text-slate-400 ml-1.5 font-sans">
+                  <span className="text-[11px] text-zinc-400 ml-1.5 font-sans">
                     (of {filteredAndSortedResults.length} currently listed)
                   </span>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 font-mono">
                 {/* Copy Selected Alpha IoC (.md) */}
                 <button
                   onClick={() => handleCopyAlphaIoc(selectedItems)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500 cursor-pointer transition shadow"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white border border-white/[0.12] px-3 py-1.5 text-xs font-semibold cursor-pointer transition shadow-sm"
                   title="Copy only selected IPs formatted as Alpha Reporter IoC markdown"
                 >
                   {copiedSelectedIoc ? (
                     <>
-                      <Check className="h-3.5 w-3.5 text-emerald-200" />
+                      <Check className="h-3.5 w-3.5 text-emerald-300" />
                       <span>Copied Selected (.md)!</span>
                     </>
                   ) : (
                     <>
-                      <FileText className="h-3.5 w-3.5" />
+                      <FileText className="h-3.5 w-3.5 text-zinc-400" />
                       <span>Copy Selected (.md)</span>
                     </>
                   )}
@@ -724,17 +724,17 @@ export default function BulkLookupPage() {
                 {/* Download Selected .md */}
                 <button
                   onClick={() => handleDownloadAlphaIoc(selectedItems)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#0e111a] px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-white/[0.06] cursor-pointer transition"
                   title="Download selected IoCs as Markdown file"
                 >
-                  <Download className="h-3.5 w-3.5 text-cyan-400" />
+                  <Download className="h-3.5 w-3.5 text-zinc-400" />
                   <span>Download .md</span>
                 </button>
 
                 {/* Export Selected CSV */}
                 <button
                   onClick={() => handleExportCsv(selectedItems)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#0e111a] px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-white/[0.06] cursor-pointer transition"
                   title="Export only selected IPs to CSV"
                 >
                   <Download className="h-3.5 w-3.5 text-cyan-400" />
@@ -875,8 +875,8 @@ export default function BulkLookupPage() {
                     return (
                       <tr
                         key={r.ip}
-                        className={`transition hover:bg-slate-800/50 ${
-                          isSelected ? 'bg-cyan-950/20' : ''
+                        className={`transition hover:bg-white/[0.04] ${
+                          isSelected ? 'bg-white/[0.06]' : ''
                         }`}
                       >
                         {/* Row Selection Checkbox */}
@@ -884,12 +884,12 @@ export default function BulkLookupPage() {
                           <button
                             type="button"
                             onClick={() => handleToggleRowSelect(r.ip)}
-                            className="cursor-pointer text-slate-400 hover:text-cyan-400 focus:outline-none transition inline-flex items-center justify-center"
+                            className="cursor-pointer text-zinc-400 hover:text-white focus:outline-none transition inline-flex items-center justify-center"
                           >
                             {isSelected ? (
-                              <CheckSquare className="h-4 w-4 text-cyan-400" />
+                              <CheckSquare className="h-4 w-4 text-white" />
                             ) : (
-                              <Square className="h-4 w-4 text-slate-600 hover:text-slate-400" />
+                              <Square className="h-4 w-4 text-zinc-600 hover:text-zinc-400" />
                             )}
                           </button>
                         </td>
@@ -898,7 +898,7 @@ export default function BulkLookupPage() {
                         <td className="py-2.5 pr-3">
                           <Link
                             href={`/ip/${encodeURIComponent(r.ip)}`}
-                            className="font-bold text-cyan-400 hover:underline"
+                            className="font-bold text-zinc-200 hover:text-white hover:underline"
                           >
                             {r.ip}
                           </Link>
@@ -998,11 +998,11 @@ export default function BulkLookupPage() {
       {/* Markdown Preview & Customization Modal */}
       {showPreview && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-3xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-[#0e111a] border border-white/[0.08] rounded-xl max-w-3xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
               <div>
-                <h3 className="text-base font-bold font-mono text-slate-100 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-cyan-400" />
+                <h3 className="text-base font-bold font-mono text-zinc-100 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-zinc-400" />
                   <span>
                     {iocOptions.reportVariant === 'alpha'
                       ? 'Alpha Reporter'
@@ -1010,23 +1010,23 @@ export default function BulkLookupPage() {
                     IoC Markdown Export
                   </span>
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-zinc-400">
                   Standard ACAD CSIRT Section 2 (INDICATOR OF COMPROMISE) formatted for SOC incident reports
                 </p>
               </div>
               <button
                 onClick={() => setShowPreview(false)}
-                className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800 cursor-pointer transition"
+                className="text-zinc-400 hover:text-zinc-200 p-1 rounded-lg hover:bg-white/[0.06] cursor-pointer transition"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Scope & Report Variant Selector */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-[#141824] p-3 rounded-lg border border-white/[0.06] text-xs font-mono">
               {/* Report Standard Variant */}
               <div className="flex items-center gap-2">
-                <span className="text-slate-400 font-medium">Standard:</span>
+                <span className="text-zinc-400 font-sans font-medium">Standard:</span>
                 <button
                   type="button"
                   onClick={() =>
@@ -1034,8 +1034,8 @@ export default function BulkLookupPage() {
                   }
                   className={`px-2.5 py-1 rounded font-mono cursor-pointer transition ${
                     iocOptions.reportVariant === 'alpha'
-                      ? 'bg-cyan-600 text-white font-semibold'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      ? 'bg-white/[0.14] text-white font-semibold'
+                      : 'bg-[#0e111a] text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   Alpha Reporter
@@ -1047,8 +1047,8 @@ export default function BulkLookupPage() {
                   }
                   className={`px-2.5 py-1 rounded font-mono cursor-pointer transition ${
                     iocOptions.reportVariant === 'charlie'
-                      ? 'bg-cyan-600 text-white font-semibold'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      ? 'bg-white/[0.14] text-white font-semibold'
+                      : 'bg-[#0e111a] text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   Charlie Reporter
@@ -1085,44 +1085,44 @@ export default function BulkLookupPage() {
             </div>
 
             {/* Formatting Checkboxes */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/70 p-3 rounded-lg border border-slate-800/80 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#141824] p-3 rounded-lg border border-white/[0.06] text-xs font-sans">
+              <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white">
                 <input
                   type="checkbox"
                   checked={iocOptions.includeSectionHeader}
                   onChange={(e) =>
                     setIocOptions((prev) => ({ ...prev, includeSectionHeader: e.target.checked }))
                   }
-                  className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                  className="rounded border-white/[0.15] bg-[#0e111a] text-zinc-300 focus:ring-0 accent-zinc-300 cursor-pointer"
                 />
                 <span>Section Header</span>
               </label>
 
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+              <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white">
                 <input
                   type="checkbox"
                   checked={iocOptions.includeHashRow}
                   onChange={(e) =>
                     setIocOptions((prev) => ({ ...prev, includeHashRow: e.target.checked }))
                   }
-                  className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                  className="rounded border-white/[0.15] bg-[#0e111a] text-zinc-300 focus:ring-0 accent-zinc-300 cursor-pointer"
                 />
                 <span>Hash Row</span>
               </label>
 
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+              <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white">
                 <input
                   type="checkbox"
                   checked={iocOptions.includeFootnote}
                   onChange={(e) =>
                     setIocOptions((prev) => ({ ...prev, includeFootnote: e.target.checked }))
                   }
-                  className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                  className="rounded border-white/[0.15] bg-[#0e111a] text-zinc-300 focus:ring-0 accent-zinc-300 cursor-pointer"
                 />
                 <span>Footnote Note</span>
               </label>
 
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+              <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white">
                 <input
                   type="checkbox"
                   checked={iocOptions.includeActivityContext}
@@ -1132,33 +1132,33 @@ export default function BulkLookupPage() {
                       includeActivityContext: e.target.checked,
                     }))
                   }
-                  className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                  className="rounded border-white/[0.15] bg-[#0e111a] text-zinc-300 focus:ring-0 accent-zinc-300 cursor-pointer"
                 />
-                <span>Attack Type Context</span>
+                <span>Attack Context</span>
               </label>
             </div>
 
             {/* Markdown Preview Area */}
-            <div className="flex-1 overflow-auto bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 whitespace-pre selection:bg-cyan-900 selection:text-white max-h-96">
+            <div className="flex-1 overflow-auto bg-[#141824] p-4 rounded-lg border border-white/[0.08] font-mono text-xs text-zinc-200 whitespace-pre selection:bg-white/10 selection:text-white max-h-96">
               {previewMarkdownContent}
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-              <span className="text-[11px] text-slate-500 font-mono">
+            <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] font-sans">
+              <span className="text-[11px] text-zinc-500 font-mono">
                 {activePreviewItems.length} IP(s) formatted in descending threat severity
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 font-mono">
                 <button
                   onClick={() => handleDownloadAlphaIoc(activePreviewItems)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#141824] px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-white/[0.06] cursor-pointer transition"
                 >
-                  <Download className="h-3.5 w-3.5 text-cyan-400" />
+                  <Download className="h-3.5 w-3.5 text-zinc-400" />
                   <span>Download .md</span>
                 </button>
                 <button
                   onClick={() => handleCopyAlphaIoc(activePreviewItems)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500 cursor-pointer transition shadow"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white border border-white/[0.12] px-4 py-1.5 text-xs font-semibold cursor-pointer transition shadow-sm"
                 >
                   {copiedIoc || copiedSelectedIoc ? (
                     <>
