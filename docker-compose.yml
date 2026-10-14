@@ -1,0 +1,41 @@
+services:
+  # 1. IP Intel Web Application
+  ip-intel-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ip-intel-web
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres@127.0.0.1:5432/abuseip}
+      USE_MOCK_DATA: ${USE_MOCK_DATA:-false}
+      AUTH_USER: ${AUTH_USER:-analyst}
+      AUTH_PASS: ${AUTH_PASS:-soc123}
+      ENABLE_RECHECK: ${ENABLE_RECHECK:-false}
+
+  # 2. Optional Isolated Postgres Service for standalone dev / CI
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: ip-intel-postgres-dev
+    profiles: ["dev-db"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: abuseip
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: PasswordKuat123
+    ports:
+      - "5433:5432"
+    volumes:
+      - ip_intel_pgdata:/var/lib/postgresql/data
+      - ../Alpha_Reporter/schema_abuseip.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d abuseip"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ip_intel_pgdata:
