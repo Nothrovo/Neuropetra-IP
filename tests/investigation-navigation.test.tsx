@@ -14,7 +14,7 @@ describe('unified navigation', () => {
     const html = renderToStaticMarkup(<NavbarView pathname="/" session={analyst} searchQuery="" onSearchChange={noop} onSearch={noop} onLogout={noop} />);
     expect(html).not.toContain('Overview'); expect(html).not.toContain('/enrich'); expect(html).not.toContain('/bulk');
     expect(html.match(/href="\/investigate"/g)).toHaveLength(2);
-    expect(html).toContain('aria-label="IP INTEL home"'); expect(html).toContain('aria-current="page"');
+    expect(html).toContain('aria-label="Neuropetra IP home"'); expect(html).toContain('aria-current="page"');
     expect(html).toContain('/dashboard'); expect(html).toContain('Analytics');
     expect(html).toContain('Ada'); expect(html).toContain('analyst'); expect(html).not.toContain('read-only');
     expect(html).not.toContain('/settings/database');

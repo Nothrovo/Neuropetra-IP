@@ -1,4 +1,4 @@
-# IP Intel
+# Neuropetra IP
 
 A standalone IP investigation application built with Next.js, TypeScript and PostgreSQL. Investigate exact IPv4/IPv6 indicators, browse local evidence and provider/ISP rosters, compare reputation with local signals, and export bounded feeds.
 

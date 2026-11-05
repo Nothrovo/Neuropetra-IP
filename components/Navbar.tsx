@@ -33,8 +33,8 @@ export function NavbarView({ pathname, session, searchQuery, onSearchChange, onS
   return <header className="sticky top-0 z-50 border-b border-white/10 bg-[#090a0f]/95 backdrop-blur-md">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
       <div className="flex items-center gap-4">
-        <Link href="/" aria-label="IP INTEL home" aria-current={pathname === '/' ? 'page' : undefined} className="flex shrink-0 items-center gap-2 rounded-md font-mono text-sm font-semibold focus-visible:ring-2 focus-visible:ring-white/50">
-          <Shield aria-hidden="true" className="h-5 w-5 text-zinc-300" /><span>IP <span className="font-normal text-zinc-400">INTEL</span></span>
+        <Link href="/" aria-label="Neuropetra IP home" aria-current={pathname === '/' ? 'page' : undefined} className="flex shrink-0 items-center gap-2 rounded-md font-mono text-sm font-semibold focus-visible:ring-2 focus-visible:ring-white/50">
+          <Shield aria-hidden="true" className="h-5 w-5 text-zinc-300" /><span>NEUROPETRA <span className="font-normal text-zinc-400">IP</span></span>
         </Link>
         <nav aria-label="Primary navigation" className="hidden items-center gap-1 lg:flex">{renderLinks()}</nav>
       </div>

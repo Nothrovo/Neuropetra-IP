@@ -4,7 +4,7 @@ import Providers from '@/components/Providers';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: 'IP Intel — SOC Threat Intelligence & Abuse Investigation',
+  title: 'Neuropetra IP — SOC Threat Intelligence & Abuse Investigation',
   description: 'Internal threat intelligence lookup and attack telemetry for SOC analysts',
 };
 

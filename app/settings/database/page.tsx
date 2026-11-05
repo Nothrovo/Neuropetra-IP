@@ -53,7 +53,7 @@ export default function DatabasePage(){
   try {await api('/api/auth/reauth',{password});setPassword('');await api(base+'/maintenance/cancel',{jobId});await refresh();setMessage('Queued job cancelled. No batch committed.');}finally{setPassword('');}
  }
  return <main className="mx-auto max-w-6xl space-y-6 p-6 text-slate-100">
-  <header><p className="text-sm text-slate-400">Settings / Administrator</p><h1 className="text-3xl font-semibold">Database Management</h1><p>No shared telemetry, indicator identity, accounts or audit records can be deleted here. Only IP Intel-owned reputation metadata is writable.</p></header>
+  <header><p className="text-sm text-slate-400">Settings / Administrator</p><h1 className="text-3xl font-semibold">Database Management</h1><p>No shared telemetry, indicator identity, accounts or audit records can be deleted here. Only Neuropetra IP-owned reputation metadata is writable.</p></header>
   {error&&<div role="alert" className="rounded border border-red-500 p-3">{error} — Retry the connection check; for a changed/expired preview, preview the selection again.</div>}
   {message&&<p role="status" className="rounded border border-emerald-600 p-3">{message}</p>}
   <section aria-label="Database connection" className="space-y-3 rounded border border-slate-700 p-4">

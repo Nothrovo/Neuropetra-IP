@@ -71,7 +71,7 @@ test('desktop navigation has one visible Investigate, Analytics, no Overview, an
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole('heading', { name: 'Global Threat Telemetry & Macro Analytics' })).toBeVisible();
   await expect(primary.getByRole('link', { name: 'Analytics', exact: true })).toHaveAttribute('aria-current', 'page');
-  await page.getByRole('link', { name: 'IP INTEL home', exact: true }).click();
+  await page.getByRole('link', { name: 'Neuropetra IP home', exact: true }).click();
   await expect(page).toHaveURL(new URL('/', process.env.IP_INTEL_E2E_ORIGIN!).href);
 });
 

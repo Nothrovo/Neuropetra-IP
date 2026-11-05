@@ -1,6 +1,6 @@
 # Security policy
 
-IP Intel is self-hosted investigation software, not a guarantee that an indicator is safe or malicious. A zero provider score means no reported abuse in that source, not a safety verdict.
+Neuropetra IP is self-hosted investigation software, not a guarantee that an indicator is safe or malicious. A zero provider score means no reported abuse in that source, not a safety verdict.
 
 ## Deployment boundaries
 

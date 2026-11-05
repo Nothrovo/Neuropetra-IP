@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "app/layout.tsx": {
-    "mtime": 1793756567.7195346,
-    "seen": 1793758139.2035003,
-    "ast_hash": "41b9808dcfa6888f0a12e2fcd4eed8f9",
+    "mtime": 1793862603.272427,
+    "seen": 1793862697.8022423,
+    "ast_hash": "c388c01666912c81fc91fb4328b083b5",
     "semantic_hash": ""
   },
   "app/login/page.tsx": {
@@ -210,9 +210,9 @@
     "semantic_hash": ""
   },
   "app/settings/database/page.tsx": {
-    "mtime": 1793757867.382595,
-    "seen": 1793758139.2035303,
-    "ast_hash": "144b99619a26b1795f942c79df1e18dd",
+    "mtime": 1793862607.7703424,
+    "seen": 1793862697.8022535,
+    "ast_hash": "6761cb4c4bf7961423ccb5dd6a257816",
     "semantic_hash": ""
   },
   "app/setup/page.tsx": {
@@ -246,9 +246,9 @@
     "semantic_hash": ""
   },
   "components/Navbar.tsx": {
-    "mtime": 1793757750.7364924,
-    "seen": 1793758139.2035606,
-    "ast_hash": "13413f968a3d0ca0d080d2beee3b680f",
+    "mtime": 1793862597.8943536,
+    "seen": 1793862697.8022668,
+    "ast_hash": "cc2a378b3df733eb94f3e3ed6ebf24d8",
     "semantic_hash": ""
   },
   "components/OutcomePanel.tsx": {
@@ -336,9 +336,9 @@
     "semantic_hash": ""
   },
   "lib/database-management.ts": {
-    "mtime": 1793758400.1910074,
-    "seen": 1793758436.3517,
-    "ast_hash": "35d820c9c3bfed4d99b5b46d7b867a89",
+    "mtime": 1793862635.4593914,
+    "seen": 1793862697.8023016,
+    "ast_hash": "f6a3ff110646952b130bd75b353463c2",
     "semantic_hash": ""
   },
   "lib/db-pool.ts": {
@@ -378,9 +378,9 @@
     "semantic_hash": ""
   },
   "lib/maintenance-repository.ts": {
-    "mtime": 1793758924.4927814,
-    "seen": 1793758958.3786874,
-    "ast_hash": "4deb256f8fc31687014e578f9bf6040b",
+    "mtime": 1793862656.5084271,
+    "seen": 1793862697.8023171,
+    "ast_hash": "58d7dec9515b3d0ab322372d0023bfe5",
     "semantic_hash": ""
   },
   "lib/mitre-matrix.ts": {
@@ -612,9 +612,9 @@
     "semantic_hash": ""
   },
   "tests/investigation-navigation.test.tsx": {
-    "mtime": 1793758218.9420362,
-    "seen": 1793758273.517493,
-    "ast_hash": "88dd3841518af9bc1e5d35923e187721",
+    "mtime": 1793862623.4729235,
+    "seen": 1793862697.8024426,
+    "ast_hash": "788ddf7da60808d124b28a44bbd881fa",
     "semantic_hash": ""
   },
   "tests/investigation-runner.test.ts": {
@@ -768,15 +768,15 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793840970.582051,
-    "seen": 1793841089.6251109,
-    "ast_hash": "706ad9a0da5a9a6bcb8b089cc28b63f0",
+    "mtime": 1793862617.7284973,
+    "seen": 1793862697.8025157,
+    "ast_hash": "a2b6eb2b5a1842bc75fd3930029ae1fb",
     "semantic_hash": ""
   },
   "SECURITY.md": {
-    "mtime": 1793757197.092237,
-    "seen": 1793758139.2039955,
-    "ast_hash": "3e18c0eea2e7124bf672691534c0ee86",
+    "mtime": 1793862612.8434167,
+    "seen": 1793862697.8025177,
+    "ast_hash": "0d821395921e4fcc8bb42a2509777d89",
     "semantic_hash": ""
   },
   "compose.postgres.yml": {
@@ -876,9 +876,9 @@
     "semantic_hash": ""
   },
   "docs/maintenance-handoff.md": {
-    "mtime": 1793841351.5955698,
-    "seen": 1793841355.521311,
-    "ast_hash": "ce910b389b5823f837c6d861851228c1",
+    "mtime": 1793842845.6156616,
+    "seen": 1793862697.802536,
+    "ast_hash": "f47d61612d2851169980181d48eaf97c",
     "semantic_hash": ""
   },
   "vitest.config.ts": {
@@ -960,15 +960,15 @@
     "semantic_hash": ""
   },
   "tests/e2e/investigation.spec.ts": {
-    "mtime": 1793781080.588255,
-    "seen": 1793781123.1455054,
-    "ast_hash": "3198f894239bb6c5b053168a946e4dfa",
+    "mtime": 1793862629.5017145,
+    "seen": 1793862697.8024201,
+    "ast_hash": "25f22b0a570fc929fce81d3cab0488bc",
     "semantic_hash": ""
   },
   "docs/reviews/implementation-verification-progress.md": {
-    "mtime": 1793842082.3365653,
-    "seen": 1793842370.7963061,
-    "ast_hash": "d24ff668db1148c5277842017855fdaa",
+    "mtime": 1793853138.0234601,
+    "seen": 1793862697.8025434,
+    "ast_hash": "15b7649cd1b906b52125f6ec4b8c191b",
     "semantic_hash": ""
   },
   "tests/auth-race-postgres.test.ts": {
@@ -1002,9 +1002,15 @@
     "semantic_hash": ""
   },
   "docs/OPERATIONS.md": {
-    "mtime": 1793841074.253997,
-    "seen": 1793841089.6251745,
-    "ast_hash": "92692a10b86a8c480f0056713298ba92",
+    "mtime": 1793843390.7075493,
+    "seen": 1793862697.8025315,
+    "ast_hash": "65b5c7b5bd290b4e4d81809d3105e70f",
+    "semantic_hash": ""
+  },
+  "docs/reviews/2026-11-05-final-integration-handoff.md": {
+    "mtime": 1793861053.6223676,
+    "seen": 1793862697.802541,
+    "ast_hash": "54567fb6d9f3f397f6508ccccbaba1f6",
     "semantic_hash": ""
   }
 }

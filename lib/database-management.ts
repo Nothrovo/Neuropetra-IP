@@ -48,7 +48,7 @@ export interface OwnedRecord {
   reputation_checked_at:string|null; revision:string;
 }
 export interface DatabaseStatus {
-  connected:boolean; identity:{deployment:'configured';databaseAlias:'IP Intel';schemaAlias:'public'};
+  connected:boolean; identity:{deployment:'configured';databaseAlias:'Neuropetra IP';schemaAlias:'public'};
   schemaVersion:string; resources:{name:string;ownership:'owned'|'shared-read-only'|'unverified-read-only';count:number;bytes:number;freshness:string|null}[];
   capabilities:{browse:boolean;maintenance:boolean;reason:string|null;bulkDelete:boolean};
   recovery:{available:boolean;instructions:string};
