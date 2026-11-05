@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ip_intel
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ip_intel"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  app:
+    networks:
+      - default
+      - database
+    depends_on:
+      postgres:
+        condition: service_healthy
+  migrate:
+    build:
+      context: .
+      target: operator
+    profiles: ["operator"]
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command: ["node", "scripts/migrate.mjs"]
+    environment:
+      MIGRATION_DATABASE_URL_FILE: /run/secrets/migration_database_url
+    secrets:
+      - migration_database_url
+    networks:
+      - database
+    depends_on:
+      postgres:
+        condition: service_healthy
+  provision:
+    build:
+      context: .
+      target: operator
+    profiles: ["operator"]
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command: ["node", "scripts/provision-bundled.mjs"]
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      ROLE_PASSWORDS_FILE: /run/secrets/role_passwords
+    secrets:
+      - postgres_password
+      - role_passwords
+    networks:
+      - database
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  pgdata:
+networks:
+  database:
+    internal: true
+secrets:
+  postgres_password:
+    file: ${IP_INTEL_SECRET_DIR:-.runtime/secrets}/postgres-password
+  role_passwords:
+    file: ${IP_INTEL_SECRET_DIR:-.runtime/secrets}/role-passwords.json
+  migration_database_url:
+    file: ${IP_INTEL_SECRET_DIR:-.runtime/secrets}/migration-database-url

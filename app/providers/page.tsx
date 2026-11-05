@@ -1,25 +1,24 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Building2,
   Search,
-  ShieldAlert,
-  Globe2,
   Activity,
-  Layers,
   ChevronRight,
-  ArrowUpDown,
 } from 'lucide-react';
+import type { ProviderSummary } from '@/lib/db';
+type DirectoryResponse = {providers: ProviderSummary[]; total: number; limit: number; offset: number};
 
 function ProvidersContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
 
+  const [offset, setOffset] = useState(0);
+  const limit = 100;
   const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'high' | 'active'>('all');
@@ -28,14 +27,15 @@ function ProvidersContent() {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedQuery(searchTerm.trim());
+      setOffset(0);
     }, 300);
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['providers-list', debouncedQuery],
+  const { data, isLoading, isError, refetch } = useQuery<DirectoryResponse>({
+    queryKey: ['providers-list', debouncedQuery, limit, offset],
     queryFn: async () => {
-      const res = await fetch(`/api/providers?q=${encodeURIComponent(debouncedQuery)}&limit=100`);
+      const res = await fetch(`/api/providers?q=${encodeURIComponent(debouncedQuery)}&limit=${limit}&offset=${offset}`);
       if (!res.ok) throw new Error('Failed to load provider directory');
       return res.json();
     },
@@ -44,9 +44,9 @@ function ProvidersContent() {
   const rawProviders = data?.providers || [];
 
   // Filter client-side by severity or activity
-  const filteredProviders = rawProviders.filter((p: any) => {
+  const filteredProviders = rawProviders.filter((p) => {
     if (filterSeverity === 'high') {
-      return p.avg_abuse_score >= 75 || p.max_abuse_score >= 75;
+      return (p.avg_abuse_score !== null && p.avg_abuse_score >= 75) || (p.max_abuse_score !== null && p.max_abuse_score >= 75);
     }
     if (filterSeverity === 'active') {
       return p.total_alerts >= 10;
@@ -55,12 +55,13 @@ function ProvidersContent() {
   });
 
   // Calculate high-level summary metrics
-  const totalProviders = data?.total || rawProviders.length;
-  const totalIps = rawProviders.reduce((acc: number, curr: any) => acc + (curr.ip_count || 0), 0);
-  const highRiskCount = rawProviders.filter((p: any) => p.avg_abuse_score >= 75 || p.max_abuse_score >= 75).length;
-  const totalAlerts = rawProviders.reduce((acc: number, curr: any) => acc + (curr.total_alerts || 0), 0);
+  const totalProviders = data?.total ?? 0;
+  const totalIps = rawProviders.reduce((acc, curr) => acc + (curr.ip_count || 0), 0);
+  const highRiskCount = rawProviders.filter((p) => (p.avg_abuse_score !== null && p.avg_abuse_score >= 75) || (p.max_abuse_score !== null && p.max_abuse_score >= 75)).length;
+  const totalAlerts = rawProviders.reduce((acc, curr) => acc + (curr.total_alerts || 0), 0);
 
-  function getScoreColor(score: number) {
+  function getScoreColor(score: number | null) {
+    if (score == null) return 'text-zinc-400 bg-zinc-950/40 border-zinc-800/60';
     if (score >= 75) return 'text-red-400 bg-red-950/40 border-red-800/60';
     if (score >= 40) return 'text-amber-400 bg-amber-950/40 border-amber-800/60';
     return 'text-emerald-400 bg-emerald-950/40 border-emerald-800/60';
@@ -87,19 +88,19 @@ function ProvidersContent() {
         {/* Aggregate KPI Ribbon */}
         <div className="flex items-center gap-3 font-mono text-xs">
           <div className="rounded-lg border border-white/[0.08] bg-[#0e111a] px-3 py-1.5">
-            <span className="text-[10px] text-zinc-500 uppercase block font-sans">Unique IPs</span>
+            <span className="text-[10px] text-zinc-500 uppercase block font-sans">Page IPs</span>
             <span className="text-sm font-semibold text-zinc-200 font-tabular">
               {isLoading ? '...' : totalIps.toLocaleString()}
             </span>
           </div>
           <div className="rounded-lg border border-red-950/60 bg-red-950/20 px-3 py-1.5">
-            <span className="text-[10px] text-red-400 uppercase block font-sans">High-Risk ASNs</span>
+            <span className="text-[10px] text-red-400 uppercase block font-sans">Page High-Risk ISPs</span>
             <span className="text-sm font-semibold text-red-400 font-tabular">
               {isLoading ? '...' : highRiskCount.toLocaleString()}
             </span>
           </div>
           <div className="rounded-lg border border-white/[0.08] bg-[#0e111a] px-3 py-1.5">
-            <span className="text-[10px] text-zinc-500 uppercase block font-sans">Total Alerts</span>
+            <span className="text-[10px] text-zinc-500 uppercase block font-sans">Page Alerts</span>
             <span className="text-sm font-semibold text-zinc-200 font-tabular">
               {isLoading ? '...' : totalAlerts.toLocaleString()}
             </span>
@@ -138,7 +139,7 @@ function ProvidersContent() {
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            All ({rawProviders.length})
+            All on page ({rawProviders.length})
           </button>
           <button
             onClick={() => setFilterSeverity('high')}
@@ -148,7 +149,7 @@ function ProvidersContent() {
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            High Risk (≥75)
+            High risk on page (≥75)
           </button>
           <button
             onClick={() => setFilterSeverity('active')}
@@ -158,7 +159,7 @@ function ProvidersContent() {
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Active (≥10 alerts)
+            Active on page (≥10 alerts)
           </button>
         </div>
       </div>
@@ -184,7 +185,7 @@ function ProvidersContent() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {filteredProviders.map((provider: any) => {
+          {filteredProviders.map((provider) => {
             const scoreClass = getScoreColor(provider.avg_abuse_score);
             return (
               <div
@@ -228,7 +229,7 @@ function ProvidersContent() {
                       title={`Average Abuse Score: ${provider.avg_abuse_score} / Max: ${provider.max_abuse_score}`}
                     >
                       <span className="text-[9px] block uppercase opacity-70 font-sans">Avg Score</span>
-                      <span className="text-xs font-bold font-tabular">{provider.avg_abuse_score}%</span>
+                      <span className="text-xs font-bold font-tabular">{provider.avg_abuse_score == null ? 'N/A' : `${provider.avg_abuse_score}%`}</span>
                     </div>
                   </div>
 
@@ -244,7 +245,7 @@ function ProvidersContent() {
                     </div>
                     <div className="rounded bg-[#141824] p-1.5">
                       <span className="text-[9px] text-zinc-500 uppercase block font-sans">Peak</span>
-                      <span className="text-xs font-bold text-red-400 font-tabular">{provider.max_abuse_score}%</span>
+                      <span className="text-xs font-bold text-red-400 font-tabular">{provider.max_abuse_score == null ? 'N/A' : `${provider.max_abuse_score}%`}</span>
                     </div>
                   </div>
                 </div>
@@ -262,6 +263,11 @@ function ProvidersContent() {
           })}
         </div>
       )}
+      <nav aria-label="Provider directory pagination" className="flex items-center gap-3 text-xs">
+        <button disabled={offset === 0 || isLoading} onClick={() => setOffset(Math.max(0, offset - limit))}>Previous page</button>
+        <span>Page {Math.floor(offset / limit) + 1} — {totalProviders} providers matching search. Severity filters apply to this page.</span>
+        <button disabled={isLoading || offset + rawProviders.length >= totalProviders} onClick={() => setOffset(offset + limit)}>Next page</button>
+      </nav>
     </div>
   );
 }

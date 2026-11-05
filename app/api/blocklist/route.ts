@@ -1,65 +1,15 @@
-import { NextResponse } from 'next/server';
-import { getBlocklistData } from '@/lib/db';
-import { checkRateLimit } from '@/lib/rate-limit';
-
-export async function GET(request: Request) {
-  const clientIp = request.headers.get('x-forwarded-for') || '127.0.0.1';
-  const { allowed } = checkRateLimit(`blocklist:${clientIp}`, 30, 0.5);
-  if (!allowed) {
-    return new NextResponse('Rate limit exceeded', { status: 429 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const format = (searchParams.get('format') || 'txt').toLowerCase();
-  const minScore = parseInt(searchParams.get('min_score') || '75', 10);
-  const minAlerts = parseInt(searchParams.get('min_alerts') || '1', 10);
-  const days = parseInt(searchParams.get('days') || '30', 10);
-
-  try {
-    const rows = await getBlocklistData({
-      minScore,
-      minAlerts,
-      maxAgeDays: days,
-    });
-
-    if (format === 'cdb') {
-      // Wazuh CDB-list format: ip:Description / Category
-      const lines = rows.map((r) => {
-        const desc = `Score_${r.abuse_score}|Alerts_${r.total_alert_count}|${r.attack_types?.[0] || 'Malicious'}`;
-        return `${r.ip}:${desc}`;
-      });
-      return new NextResponse(lines.join('\n'), {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Content-Disposition': 'attachment; filename="wazuh_blocklist.cdb"',
-        },
-      });
-    }
-
-    if (format === 'csv') {
-      const header = 'ip,abuse_score,total_alerts,country,primary_attack\n';
-      const lines = rows.map(
-        (r) =>
-          `"${r.ip}",${r.abuse_score},${r.total_alert_count},"${r.country_code}","${r.attack_types?.[0] || 'unspecified'}"`
-      );
-      return new NextResponse(header + lines.join('\n'), {
-        headers: {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': 'attachment; filename="ip_intel_blocklist.csv"',
-        },
-      });
-    }
-
-    // Default: Plain text IP list (one IP per line)
-    const ipList = rows.map((r) => r.ip).join('\n');
-    return new NextResponse(ipList, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="ip_blocklist.txt"',
-      },
-    });
-  } catch (err: any) {
-    console.error('[API /blocklist Error]', err);
-    return new NextResponse('Failed to generate blocklist', { status: 500 });
-  }
+import {getBlocklistData} from '@/lib/db';
+import {withApiPermission,apiError as authError} from '@/lib/authorization';
+import {requireFeedToken} from '@/lib/feed-auth';
+import {apiError,ApiInputError,integerParam} from '@/lib/api-input';
+import {feedFormat,serializeFeed} from '@/lib/export';
+import {checkRateLimit} from '@/lib/rate-limit';
+async function feed(request:Request,identity:string):Promise<Response> {
+ if(!checkRateLimit(`blocklist:${identity}`,30,0.5).allowed)return Response.json({error:'Rate limit exceeded'},{status:429});
+ try{const params=new URL(request.url).searchParams,format=feedFormat(params.get('format')),minScore=integerParam(params,'min_score',75,0,100),minAlerts=integerParam(params,'min_alerts',1,0,1000000000),maxAgeDays=integerParam(params,'days',30,1,3660),maxRows=integerParam(params,'max_rows',10000,1,10000);const rows=await getBlocklistData({minScore,minAlerts,maxAgeDays,maxRows});if(rows.length>maxRows)throw new ApiInputError(`Feed exceeds ${maxRows} rows; narrow filters`,413);return new Response(serializeFeed(rows,format),{headers:{'Content-Type':format==='csv'?'text/csv; charset=utf-8':'text/plain; charset=utf-8','Content-Disposition':`attachment; filename="ip_blocklist.${format}"`,'Cache-Control':'no-store','X-Export-Count':String(rows.length)}});}catch(error){return apiError(error);}
+}
+const interactive=withApiPermission(async(request,_context,session)=>feed(request,`session:${session.userId}`),'feed:read');
+export async function GET(request:Request,context:unknown):Promise<Response> {
+ if(request.headers.has('authorization')){try{const token=await requireFeedToken(request);return await feed(request,`token:${token.id}`);}catch(error){return authError(error);}}
+ return interactive(request,context);
 }

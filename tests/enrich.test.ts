@@ -21,7 +21,7 @@ describe('Live AbuseIPDB Enrichment Engine', () => {
     // Abuse score classification
     expect(classifyThreatScore(100)).toBe('Malicious / High Risk');
     expect(classifyThreatScore(4)).toBe('Low Reported Abuse Score');
-    expect(classifyThreatScore(0)).toBe('Clean / 0% Abuse Confidence');
+    expect(classifyThreatScore(0)).toBe('0% Reported Abuse Confidence (not a safety verdict)');
 
     // High telemetry malicious verdict
     const mal = calculateVerdictScore({
@@ -36,7 +36,8 @@ describe('Live AbuseIPDB Enrichment Engine', () => {
 
     // 0% Clean
     const clean = calculateVerdictScore({ abuseScore: 0 });
-    expect(clean.verdict).toBe('Low risk');
+    expect(clean.verdict).toBe('Unknown');
+    expect(clean.components.localSignal.rawScore).toBe(0);
   });
 
   it('upserts reputation to cache in mock mode', async () => {

@@ -1,0 +1,43 @@
+services:
+  app:
+    environment:
+      MAINTENANCE_DATABASE_URL_FILE: /run/secrets/maintenance_database_url
+      MAINTENANCE_OWNERSHIP: ${MAINTENANCE_OWNERSHIP:-}
+      MAINTENANCE_RECOVERY_CHECKPOINT_ID: ${MAINTENANCE_RECOVERY_CHECKPOINT_ID:-}
+      MAINTENANCE_RECOVERY_VERIFIED_AT: ${MAINTENANCE_RECOVERY_VERIFIED_AT:-}
+    secrets:
+      - maintenance_database_url
+  maintenance-worker:
+    build:
+      context: .
+      target: operator
+    profiles: ["operator"]
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command: ["node", "--import", "tsx", "scripts/maintenance-worker.mjs", "--max-jobs", "10"]
+    environment:
+      AUTH_DATABASE_URL_FILE: /run/secrets/auth_database_url
+      READ_DATABASE_URL_FILE: /run/secrets/read_database_url
+      MAINTENANCE_DATABASE_URL_FILE: /run/secrets/maintenance_database_url
+      MAINTENANCE_OWNERSHIP: ${MAINTENANCE_OWNERSHIP:-}
+      MAINTENANCE_RECOVERY_CHECKPOINT_ID: ${MAINTENANCE_RECOVERY_CHECKPOINT_ID:-}
+      MAINTENANCE_RECOVERY_VERIFIED_AT: ${MAINTENANCE_RECOVERY_VERIFIED_AT:-}
+    secrets:
+      - auth_database_url
+      - read_database_url
+      - maintenance_database_url
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - default
+      - database
+networks:
+  database:
+    internal: true
+secrets:
+  maintenance_database_url:
+    file: ${IP_INTEL_SECRET_DIR:-.runtime/secrets}/maintenance-database-url

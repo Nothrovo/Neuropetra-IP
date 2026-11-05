@@ -1,92 +1,53 @@
-/**
- * IP and CIDR validation and defang utilities.
- */
+/** Canonical exact-IP parsing and conservative provider-egress policy. */
+import ipaddr from 'ipaddr.js';
 
-const IPV4_REGEX =
-  /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
-
-const IPV6_REGEX =
-  /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
-
-export function isValidIPv4(ip: string): boolean {
-  return IPV4_REGEX.test(ip.trim());
-}
-
-export function isValidIPv6(ip: string): boolean {
-  return IPV6_REGEX.test(ip.trim());
-}
-
-export function isValidIP(ip: string): boolean {
-  const clean = ip.trim();
-  return isValidIPv4(clean) || isValidIPv6(clean);
-}
-
-export function isValidCIDR(cidr: string): boolean {
-  const parts = cidr.trim().split('/');
-  if (parts.length !== 2) return false;
-  const [ip, prefixStr] = parts;
-  const prefix = parseInt(prefixStr, 10);
-  if (isNaN(prefix)) return false;
-
-  if (isValidIPv4(ip)) {
-    return prefix >= 0 && prefix <= 32;
-  }
-  if (isValidIPv6(ip)) {
-    return prefix >= 0 && prefix <= 128;
-  }
-  return false;
-}
-
-export function validateIpOrCidr(input: string): {
-  valid: boolean;
-  type: 'ipv4' | 'ipv6' | 'cidr' | 'invalid';
-  cleanValue: string;
-} {
+export function normalizeIp(input: string): string {
+  if (typeof input !== 'string') throw new Error('Expected an IP string');
   const clean = input.trim();
-  if (clean.includes('/')) {
-    if (isValidCIDR(clean)) return { valid: true, type: 'cidr', cleanValue: clean };
-  } else if (isValidIPv4(clean)) {
-    return { valid: true, type: 'ipv4', cleanValue: clean };
-  } else if (isValidIPv6(clean)) {
-    return { valid: true, type: 'ipv6', cleanValue: clean };
-  }
-  return { valid: false, type: 'invalid', cleanValue: clean };
+  if (!clean || clean.includes('%') || clean.includes('/') || !ipaddr.isValid(clean)) throw new Error('Invalid exact IP address');
+  const dotted = clean.includes('.') ? clean.slice(clean.lastIndexOf(':') + 1) : clean;
+  if ((!clean.includes(':') || clean.includes('.')) && (!/^\d+\.\d+\.\d+\.\d+$/.test(dotted) || dotted.split('.').some(p => String(Number(p)) !== p))) throw new Error('Invalid IPv4 literal');
+  return ipaddr.parse(clean).toString();
 }
-
-/**
- * Safely defangs an IP address, domain, or URL to prevent accidental clicks or execution.
- * Example: 198.51.100.23 -> 198.51.100[.]23, https:// -> hxxps://
- */
+export function isValidIPv4(ip: string): boolean { try { return ipaddr.parse(normalizeIp(ip)).kind() === 'ipv4'; } catch { return false; } }
+export function isValidIPv6(ip: string): boolean { try { return ipaddr.parse(normalizeIp(ip)).kind() === 'ipv6'; } catch { return false; } }
+export function isValidIP(ip: string): boolean { try { normalizeIp(ip); return true; } catch { return false; } }
+export function isValidCIDR(cidr: string): boolean {
+  if (typeof cidr !== 'string') return false;
+  const parts = cidr.trim().split('/');
+  if (parts.length !== 2 || !/^(0|[1-9]\d*)$/.test(parts[1]) || !isValidIP(parts[0])) return false;
+  return Number(parts[1]) <= (isValidIPv4(parts[0]) ? 32 : 128);
+}
+export function validateIpOrCidr(input: string): {valid: boolean; type: 'ipv4'|'ipv6'|'cidr'|'invalid'; cleanValue: string} {
+  const clean = typeof input === 'string' ? input.trim() : '';
+  if (isValidCIDR(clean)) return {valid:true,type:'cidr',cleanValue:clean};
+  if (isValidIP(clean)) return {valid:true,type:isValidIPv4(clean)?'ipv4':'ipv6',cleanValue:normalizeIp(clean)};
+  return {valid:false,type:'invalid',cleanValue:clean};
+}
+export function isGlobalIp(ip: string): boolean {
+  try {
+    const parsed = ipaddr.parse(normalizeIp(ip));
+    if (parsed.range() !== 'unicast') return false;
+    if (parsed.kind() === 'ipv6') {
+      const v6 = parsed as ipaddr.IPv6;
+      if (!v6.match(ipaddr.IPv6.parse('2000::'), 3)) return false;
+      for (const cidr of ['2001::/23','2001:db8::/32','2002::/16','3fff::/20']) {
+        const [network,bits] = ipaddr.parseCIDR(cidr);
+        if (v6.match(network as ipaddr.IPv6,bits)) return false;
+      }
+    }
+    return true;
+  } catch { return false; }
+}
+/** Legacy name means non-global, never safe/whitelisted. */
+export function isPrivateIp(ip: string): boolean { return !isGlobalIp(ip); }
 export function defang(target: string): string {
   if (!target) return '';
-  let result = target.trim();
-  // Defang URL protocols
-  result = result.replace(/https:\/\//gi, 'hxxps://').replace(/http:\/\//gi, 'hxxp://');
-  // Defang IPv4
-  if (isValidIPv4(result)) {
-    const parts = result.split('.');
-    return `${parts[0]}.${parts[1]}.${parts[2]}[.]${parts[3]}`;
-  }
-  // Generic dot defanging for domains
+  const result = target.trim().replace(/https:\/\//gi, 'hxxps://').replace(/http:\/\//gi, 'hxxp://');
+  if (isValidIPv4(result)) { const p = result.split('.'); return `${p[0]}.${p[1]}.${p[2]}[.]${p[3]}`; }
   return result.replace(/\./g, '[.]');
 }
-
-/**
- * Returns the /24 subnet prefix for an IPv4 address.
- * Example: 198.51.100.23 -> 198.51.100.0/24
- */
 export function getSubnet24(ip: string): string | null {
   if (!isValidIPv4(ip)) return null;
-  const parts = ip.trim().split('.');
-  return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+  return `${ip.trim().split('.').slice(0,3).join('.')}.0/24`;
 }
-
-/**
- * Detects private, loopback, link-local, or unroutable IP addresses (RFC1918 / RFC3927 / RFC4291).
- */
-export function isPrivateIp(ip: string): boolean {
-  if (!ip) return true;
-  const clean = ip.trim();
-  return /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|0\.0\.0\.0|localhost|::1|fe80:)/i.test(clean);
-}
-

@@ -1,0 +1,27 @@
+services:
+  account:
+    build:
+      context: .
+      target: operator
+    profiles: ["operator"]
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command: ["node_modules/.bin/tsx", "scripts/account.ts", "bootstrap", "--out", "/output/bootstrap-token"]
+    environment:
+      AUTH_DATABASE_URL_FILE: /run/secrets/auth_database_url
+    secrets:
+      - auth_database_url
+    volumes:
+      - ${IP_INTEL_OWNER_DIR:-./.runtime/owner}:/output
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - default
+      - database
+networks:
+  database:
+    internal: true

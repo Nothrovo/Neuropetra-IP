@@ -7,7 +7,19 @@
  * - Gold Standard SOC Incident Reports
  */
 
-import { isPrivateIp } from './ip-validator';
+import ipaddr from 'ipaddr.js';
+import { isGlobalIp, normalizeIp } from './ip-validator';
+
+function isPrivateIp(ip: string): boolean {
+  try {
+    const address = ipaddr.parse(normalizeIp(ip));
+    return address.range() === 'private' || address.range() === 'uniqueLocal';
+  } catch { return false; }
+}
+
+function markdownCell(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/[\r\n\u2028\u2029]+/g, ' ').replace(/[|<>\[\]*`\\]/g, character => `&#${character.charCodeAt(0)};`);
+}
 
 export interface BulkIpItem {
   ip: string;
@@ -109,7 +121,7 @@ export function classifyThreatScore(score: number | string | null | undefined): 
   if (isNaN(num)) return 'Not Enriched';
   if (num >= 70) return 'Malicious / High Risk';
   if (num >= 20) return 'Suspicious / Moderate Risk';
-  if (num === 0) return 'Clean / 0% Abuse Confidence';
+  if (num === 0) return '0% Reported Abuse Confidence (not a safety verdict)';
   return 'Low Reported Abuse Score';
 }
 
@@ -130,8 +142,6 @@ export function resolveEffectiveScore(item: BulkIpItem): {
     let scoreVal: number | null = null;
     if (item.vtMalicious !== null && item.vtMalicious !== undefined) {
       scoreVal = item.vtMalicious >= 5 ? 100 : item.vtMalicious >= 2 ? 60 : item.vtMalicious >= 1 ? 25 : 0;
-    } else if (item.compositeScore !== undefined && item.compositeScore !== null) {
-      scoreVal = item.compositeScore;
     }
     const scoreStr = scoreVal !== null ? `${scoreVal}%` : 'N/A';
     return { sourceName, scoreVal, scoreStr };
@@ -141,8 +151,6 @@ export function resolveEffectiveScore(item: BulkIpItem): {
   let scoreVal: number | null = null;
   if (item.abuseScore !== null && item.abuseScore !== undefined) {
     scoreVal = Number(item.abuseScore);
-  } else if (item.compositeScore !== undefined && item.compositeScore !== null) {
-    scoreVal = item.compositeScore;
   }
   const scoreStr = scoreVal !== null ? `${scoreVal}%` : 'N/A';
   return { sourceName, scoreVal, scoreStr };
@@ -158,10 +166,15 @@ export function formatSingleIocRow(
   options?: { includeActivityContext?: boolean }
 ): string {
   const includeActivity = options?.includeActivityContext !== false;
+  const ip = markdownCell(item.ip);
 
   // 1. Private / Internal IP Handling
   if (isPrivateIp(item.ip)) {
-    return `| IP | ${item.ip} | Local Network | Private IP RFC1918 [Internal Network Context] |`;
+    const kind = item.ip.includes(':') ? 'Private IPv6 ULA' : 'Private IP RFC1918';
+    return `| IP | ${ip} | Local Network | ${kind} [Internal Network Context] |`;
+  }
+  if (!isGlobalIp(item.ip)) {
+    return `| IP | ${ip} | Non-global Network | Non-global IP [Special-use address; not a safety verdict] |`;
   }
 
   // 2. Geolocation & ASN Handling
@@ -180,7 +193,7 @@ export function formatSingleIocRow(
 
   // 3. Not Found / Un-enriched Handling
   if (item.found === false) {
-    return `| IP | ${item.ip} | ${countryAsn} | External Source IP [Reputation Not Enriched] |`;
+    return `| IP | ${ip} | ${markdownCell(countryAsn)} | External Source IP [Reputation Not Enriched] |`;
   }
 
   // 4. Reputation & Threat Intel Scoring
@@ -190,10 +203,10 @@ export function formatSingleIocRow(
 
   // 5. Activity Context (Attack Type only; request counts removed per SOC reporting standard)
   if (includeActivity && item.topAttackType && item.topAttackType !== 'None' && item.topAttackType !== 'Unspecified') {
-    desc += ` (${item.topAttackType})`;
+    desc += ` (${markdownCell(item.topAttackType)})`;
   }
 
-  return `| IP | ${item.ip} | ${countryAsn} | ${desc} |`;
+  return `| IP | ${ip} | ${markdownCell(countryAsn)} | ${desc} |`;
 }
 
 /**

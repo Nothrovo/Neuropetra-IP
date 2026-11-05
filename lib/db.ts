@@ -3,36 +3,40 @@
  * Enforces server-side execution, parameterized queries, and read-only behavior.
  */
 
-import { Pool } from 'pg';
+import { getReadPool } from './db-pool';
+import { getMockReputation, getMockReputations, saveReputation, type ReputationWrite } from './reputation-repository';
+import { normalizeIp } from './ip-validator';
+import { eventPredicate, filterEvents, type TelemetryScope } from './telemetry-aggregates';
 import { MOCK_IP_CACHE, MOCK_IP_EVENTS, IpIntelCacheRow, IpIntelEventRow } from './mock-data';
+export type IntelRow = Omit<IpIntelCacheRow, 'first_seen'|'last_seen'|'geo_json'|'reputation_json'> & {first_seen:string|null;last_seen:string|null;geo_json:(Record<string,unknown> & {country?:string;countryCode?:string;isp?:string;as?:string})|null;reputation_json:Record<string,unknown>|null};
+const mergedSelect = `SELECT COALESCE(c.ip,r.ip) AS ip,c.first_seen,c.last_seen,c.last_alert_id,
+ CASE WHEN r.ip IS NOT NULL THEN 'abuseipdb' ELSE c.reputation_source END AS reputation_source,
+ COALESCE(r.abuse_score,c.abuse_score) AS abuse_score,c.vt_malicious,COALESCE(r.country_code,c.country_code) AS country_code,
+ COALESCE(r.isp,c.isp) AS isp,COALESCE(r.geo_json,c.geo_json) AS geo_json,COALESCE(r.reputation_json,c.reputation_json) AS reputation_json,
+ COALESCE(c.attack_types,ARRAY[]::text[]) AS attack_types,COALESCE(c.mitre_tactics,ARRAY[]::text[]) AS mitre_tactics,
+ COALESCE(c.target_hosts,ARRAY[]::text[]) AS target_hosts,COALESCE(c.endpoints_targeted,ARRAY[]::text[]) AS endpoints_targeted,
+ COALESCE(c.http_methods_used,ARRAY[]::text[]) AS http_methods_used,COALESCE(c.total_alert_count,0) AS total_alert_count,c.notes,
+ COALESCE(r.reputation_checked_at,c.reputation_checked_at) AS reputation_checked_at
+ FROM ip_intel_cache c FULL OUTER JOIN ip_intel_reputation r ON c.ip=r.ip`;
+function mockIntel(ip:string):IntelRow|null {
+ const c=MOCK_IP_CACHE.find(row=>row.ip===ip),r=getMockReputation(ip);
+ if(!c&&!r)return null;
+ const base:IntelRow=c?{...c}:{ip,first_seen:null,last_seen:null,last_alert_id:null,reputation_source:null,abuse_score:null,vt_malicious:null,country_code:null,isp:null,geo_json:null,reputation_json:null,attack_types:[],mitre_tactics:[],target_hosts:[],endpoints_targeted:[],http_methods_used:[],total_alert_count:0,notes:null,reputation_checked_at:null};
+ return r?{...base,...r,country_code:r.country_code??base.country_code,isp:r.isp??base.isp,geo_json:r.geo_json??base.geo_json,reputation_json:r.reputation_json??base.reputation_json,reputation_source:'abuseipdb'}:base;
+}
+
+function mockIntels():IntelRow[] {
+ const ips=new Set([...MOCK_IP_CACHE.map(row=>row.ip),...getMockReputations().map(row=>row.ip)]);
+ return [...ips].map(ip=>mockIntel(ip)!);
+}
+const intelRelation = `(${mergedSelect}) intel`;
 
 const isMock = process.env.USE_MOCK_DATA === 'true';
-
-let pool: Pool | null = null;
-
-function getPool(): Pool {
-  if (!pool) {
-    const connectionString =
-      process.env.DATABASE_URL || 'postgresql://soc_readonly:REDACTED_PASSWORD@127.0.0.1:5432/abuseip';
-
-    pool = new Pool({
-      connectionString,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-
-    pool.on('error', (err) => {
-      console.error('[PostgreSQL Pool Error]', err);
-    });
-  }
-  return pool;
-}
 
 /**
  * Execute a read-only parameterized query against PostgreSQL.
  */
-export async function query<T = any>(text: string, params: any[] = []): Promise<T[]> {
+export async function query<T = Record<string,unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
   if (isMock) {
     throw new Error('Direct query called in mock mode. Use repository methods.');
   }
@@ -43,10 +47,15 @@ export async function query<T = any>(text: string, params: any[] = []): Promise<
     throw new Error('Security Violation: Only SELECT/WITH read-only queries are permitted.');
   }
 
-  const client = await getPool().connect();
+  const client = await getReadPool().connect();
   try {
+    await client.query('BEGIN READ ONLY');
     const res = await client.query(text, params);
+    await client.query('COMMIT');
     return res.rows;
+  } catch(error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }
@@ -56,26 +65,11 @@ export async function query<T = any>(text: string, params: any[] = []): Promise<
 // REPOSITORY METHODS
 // -------------------------------------------------------------
 
-export async function getIpIntel(ip: string): Promise<IpIntelCacheRow | null> {
-  const cleanIp = ip.trim();
-  if (isMock) {
-    const found = MOCK_IP_CACHE.find((item) => item.ip === cleanIp);
-    return found ? { ...found } : null;
-  }
-
-  const rows = await query<IpIntelCacheRow>(
-    `SELECT ip, first_seen, last_seen, last_alert_id, reputation_source,
-            abuse_score, vt_malicious, country_code, isp, geo_json,
-            reputation_json, attack_types, mitre_tactics, target_hosts,
-            endpoints_targeted, http_methods_used, total_alert_count,
-            notes, reputation_checked_at
-       FROM ip_intel_cache
-      WHERE ip = $1
-      LIMIT 1`,
-    [cleanIp]
-  );
-
-  return rows[0] || null;
+export async function getIpIntel(ip:string):Promise<IntelRow|null> {
+ const cleanIp=normalizeIp(ip);
+ if(isMock)return mockIntel(cleanIp);
+ const rows=await query<IntelRow>(`${mergedSelect} WHERE COALESCE(c.ip,r.ip) = $1 LIMIT 1`,[cleanIp]);
+ return rows[0]??null;
 }
 
 export interface EventsFilter {
@@ -85,6 +79,8 @@ export interface EventsFilter {
   outcome?: string;
   targetHost?: string;
   days?: number;
+  from?: string;
+  to?: string;
 }
 
 export async function getIpEvents(
@@ -95,46 +91,11 @@ export async function getIpEvents(
   const limit = Math.min(100, Math.max(1, filter.limit || 20));
   const offset = Math.max(0, filter.offset || 0);
 
-  if (isMock) {
-    let list = MOCK_IP_EVENTS.filter((e) => e.ip === cleanIp);
-    if (filter.alertType) {
-      list = list.filter((e) => e.alert_type === filter.alertType);
-    }
-    if (filter.targetHost) {
-      list = list.filter((e) => e.target_host === filter.targetHost);
-    }
-    if (filter.outcome) {
-      list = list.filter((e) => e.outcome === filter.outcome);
-    }
-    const total = list.length;
-    const paginated = list
-      .sort((a, b) => new Date(b.seen_at).getTime() - new Date(a.seen_at).getTime())
-      .slice(offset, offset + limit);
-    return { events: paginated, total };
-  }
-
-  const conditions: string[] = ['ip = $1'];
-  const params: any[] = [cleanIp];
-  let paramIdx = 2;
-
-  if (filter.alertType) {
-    conditions.push(`alert_type = $${paramIdx++}`);
-    params.push(filter.alertType);
-  }
-  if (filter.targetHost) {
-    conditions.push(`target_host = $${paramIdx++}`);
-    params.push(filter.targetHost);
-  }
-  if (filter.outcome) {
-    conditions.push(`outcome = $${paramIdx++}`);
-    params.push(filter.outcome);
-  }
-  if (filter.days) {
-    conditions.push(`seen_at >= NOW() - ($${paramIdx++} || ' days')::INTERVAL`);
-    params.push(filter.days.toString());
-  }
-
-  const whereClause = conditions.join(' AND ');
+  const to=filter.to??new Date().toISOString();
+  const scope:TelemetryScope={from:filter.from??new Date(Date.parse(to)-(filter.days??30)*86400000).toISOString(),to,alertType:filter.alertType,outcome:filter.outcome,targetHost:filter.targetHost};
+  if(isMock){const list=filterEvents(MOCK_IP_EVENTS.filter(e=>e.ip===cleanIp),scope).sort((a,b)=>Date.parse(b.seen_at)-Date.parse(a.seen_at)||b.id-a.id);return {events:list.slice(offset,offset+limit),total:list.length};}
+  const {where:whereClause,params}=eventPredicate(cleanIp,scope);
+  let paramIdx=params.length+1;
 
   const countRows = await query<{ count: string }>(
     `SELECT COUNT(*) AS count FROM ip_intel_events WHERE ${whereClause}`,
@@ -148,7 +109,7 @@ export async function getIpEvents(
             target_host, endpoint, outcome, raw_summary
        FROM ip_intel_events
       WHERE ${whereClause}
-      ORDER BY seen_at DESC
+      ORDER BY seen_at DESC, id DESC
       LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
     dataParams
   );
@@ -156,19 +117,19 @@ export async function getIpEvents(
   return { events, total };
 }
 
-export async function getTopAttackers(limit: number = 10): Promise<IpIntelCacheRow[]> {
+export async function getTopAttackers(limit: number = 10): Promise<IntelRow[]> {
   const safeLimit = Math.min(100, Math.max(1, limit));
   if (isMock) {
-    return [...MOCK_IP_CACHE]
+    return mockIntels()
       .sort((a, b) => b.total_alert_count - a.total_alert_count)
       .slice(0, safeLimit);
   }
 
-  return query<IpIntelCacheRow>(
+  return query<IntelRow>(
     `SELECT ip, first_seen, last_seen, reputation_source,
             abuse_score, vt_malicious, country_code, isp,
             attack_types, mitre_tactics, target_hosts, total_alert_count
-       FROM ip_intel_cache
+       FROM ${intelRelation}
       ORDER BY total_alert_count DESC, abuse_score DESC NULLS LAST
       LIMIT $1`,
     [safeLimit]
@@ -205,12 +166,12 @@ export interface GlobalStats {
 export async function getGlobalStats(): Promise<GlobalStats> {
   if (isMock) {
     return {
-      ipsTracked: MOCK_IP_CACHE.length,
-      maliciousCount: MOCK_IP_CACHE.filter((c) => (c.abuse_score || 0) >= 75).length,
-      events24h: MOCK_IP_EVENTS.filter((e) => Date.now() - new Date(e.seen_at).getTime() < 86400000).length,
-      events7d: MOCK_IP_EVENTS.filter((e) => Date.now() - new Date(e.seen_at).getTime() < 7 * 86400000).length,
-      events30d: MOCK_IP_EVENTS.length,
-      distinctTargetHosts: new Set(MOCK_IP_CACHE.flatMap((c) => c.target_hosts)).size,
+      ipsTracked: mockIntels().length,
+      maliciousCount: mockIntels().filter((c) => (c.abuse_score ?? -1) >= 75 || (c.vt_malicious ?? 0)>=5).length,
+      events24h: MOCK_IP_EVENTS.filter((e) => new Date(e.seen_at).getTime() < Date.now() && Date.now() - new Date(e.seen_at).getTime() <= 86400000).length,
+      events7d: MOCK_IP_EVENTS.filter((e) => new Date(e.seen_at).getTime() < Date.now() && Date.now() - new Date(e.seen_at).getTime() <= 7 * 86400000).length,
+      events30d: MOCK_IP_EVENTS.filter(e=>Date.parse(e.seen_at)<Date.now() && Date.parse(e.seen_at)>=Date.now()-30*86400000).length,
+      distinctTargetHosts: new Set(mockIntels().flatMap((c) => c.target_hosts)).size,
     };
   }
 
@@ -218,20 +179,20 @@ export async function getGlobalStats(): Promise<GlobalStats> {
     query<{ total: string; malicious: string }>(
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER (WHERE abuse_score >= 75 OR vt_malicious >= 5) AS malicious
-         FROM ip_intel_cache`
+         FROM ${intelRelation}`
     ),
     query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM ip_intel_events WHERE seen_at >= NOW() - INTERVAL '24 hours'`
+      `SELECT COUNT(*) AS count FROM ip_intel_events WHERE seen_at >= NOW() - INTERVAL '24 hours' AND seen_at < NOW()`
     ),
     query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM ip_intel_events WHERE seen_at >= NOW() - INTERVAL '7 days'`
+      `SELECT COUNT(*) AS count FROM ip_intel_events WHERE seen_at >= NOW() - INTERVAL '7 days' AND seen_at < NOW()`
     ),
     query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM ip_intel_events WHERE seen_at >= NOW() - INTERVAL '30 days'`
+      `SELECT COUNT(*) AS count FROM ip_intel_events WHERE seen_at >= NOW() - INTERVAL '30 days' AND seen_at < NOW()`
     ),
     query<{ count: string }>(
       `SELECT COUNT(DISTINCT h) AS count
-         FROM (SELECT unnest(target_hosts) AS h FROM ip_intel_cache) sub`
+         FROM (SELECT unnest(target_hosts) AS h FROM ${intelRelation}) sub`
     ),
   ]);
 
@@ -245,37 +206,26 @@ export async function getGlobalStats(): Promise<GlobalStats> {
   };
 }
 
-export async function getBulkIntel(ips: string[]): Promise<IpIntelCacheRow[]> {
-  if (ips.length === 0) return [];
-  const cleanIps = ips.map((ip) => ip.trim()).filter(Boolean);
-
-  if (isMock) {
-    return MOCK_IP_CACHE.filter((c) => cleanIps.includes(c.ip));
-  }
-
-  return query<IpIntelCacheRow>(
-    `SELECT ip, first_seen, last_seen, reputation_source,
-            abuse_score, vt_malicious, country_code, isp, geo_json,
-            attack_types, mitre_tactics, target_hosts, total_alert_count
-       FROM ip_intel_cache
-      WHERE ip = ANY($1)`,
-    [cleanIps]
-  );
+export async function getBulkIntel(ips:string[]):Promise<IntelRow[]> {
+ if(!ips.length)return [];
+ const clean=ips.map(normalizeIp);
+ if(isMock)return clean.map(mockIntel).filter((r):r is IntelRow=>r!==null);
+ return query<IntelRow>(`${mergedSelect} WHERE COALESCE(c.ip,r.ip) = ANY($1::text[])`,[clean]);
 }
 
 export async function getRelatedIps(
   currentIp: string,
   subnet24: string | null,
   isp: string | null
-): Promise<IpIntelCacheRow[]> {
+): Promise<IntelRow[]> {
   if (isMock) {
-    return MOCK_IP_CACHE.filter((c) => c.ip !== currentIp && (c.isp === isp || (subnet24 && c.ip.startsWith(subnet24.slice(0, 10)))));
+    return mockIntels().filter((c) => c.ip !== currentIp && ((isp !== null && c.isp === isp) || (subnet24 && c.ip.startsWith(subnet24.replace('.0/24','')+'.')))).slice(0,10);
   }
 
   const prefix = subnet24 ? subnet24.replace('.0/24', '') : null;
-  return query<IpIntelCacheRow>(
+  return query<IntelRow>(
     `SELECT ip, abuse_score, vt_malicious, country_code, isp, total_alert_count, last_seen
-       FROM ip_intel_cache
+       FROM ${intelRelation}
       WHERE ip != $1
         AND (
           ($2::text IS NOT NULL AND ip LIKE $2 || '.%')
@@ -291,140 +241,75 @@ export async function getBlocklistData(options: {
   minScore?: number;
   minAlerts?: number;
   maxAgeDays?: number;
-}): Promise<{ ip: string; abuse_score: number; total_alert_count: number; country_code: string; attack_types: string[] }[]> {
-  const minScore = options.minScore || 75;
-  const minAlerts = options.minAlerts || 1;
-  const maxAgeDays = options.maxAgeDays || 30;
+  maxRows?: number;
+}): Promise<{ ip: string; abuse_score: number|null; vt_malicious: number|null; total_alert_count: number; country_code: string|null; attack_types: string[] }[]> {
+  const minScore = options.minScore ?? 75;
+  const minAlerts = options.minAlerts ?? 1;
+  const maxAgeDays = options.maxAgeDays ?? 30;
 
   if (isMock) {
-    return MOCK_IP_CACHE.filter(
-      (c) => (c.abuse_score || 0) >= minScore && c.total_alert_count >= minAlerts
+    return mockIntels().filter(
+      (c) => ((c.abuse_score ?? -1) >= minScore || (c.vt_malicious ?? 0) >= 5) && c.total_alert_count >= minAlerts && Date.parse(c.last_seen??'')>=Date.now()-maxAgeDays*86400000 && Date.parse(c.last_seen??'')<Date.now()
     ).map((c) => ({
       ip: c.ip,
-      abuse_score: c.abuse_score || 0,
+      abuse_score: c.abuse_score,
+      vt_malicious: c.vt_malicious,
       total_alert_count: c.total_alert_count,
-      country_code: c.country_code || 'XX',
+      country_code: c.country_code,
       attack_types: c.attack_types || [],
     }));
   }
 
   return query(
-    `SELECT ip, abuse_score, total_alert_count, country_code, attack_types
-       FROM ip_intel_cache
+    `SELECT ip, abuse_score, vt_malicious, total_alert_count, country_code, attack_types
+       FROM ${intelRelation}
       WHERE (abuse_score >= $1 OR vt_malicious >= 5)
         AND total_alert_count >= $2
         AND last_seen >= NOW() - ($3 || ' days')::INTERVAL
-      ORDER BY total_alert_count DESC, abuse_score DESC`,
-    [minScore, minAlerts, maxAgeDays.toString()]
+      AND last_seen < NOW()
+      ORDER BY total_alert_count DESC, abuse_score DESC LIMIT $4`,
+    [minScore, minAlerts, maxAgeDays.toString(),(options.maxRows??10000)+1]
   );
 }
 
-export async function getDashboardAnalytics(days: number = 30) {
-  if (isMock) {
-    return {
-      topCountries: [
-        { code: 'DE', count: 1 },
-        { code: 'RU', count: 1 },
-        { code: 'NL', count: 1 },
-        { code: 'ID', count: 1 },
-        { code: 'US', count: 1 },
-      ],
-      topAsns: [
-        { name: 'AS208294 Tor Network', count: 1 },
-        { name: 'AS57523 Hostkey', count: 1 },
-        { name: 'AS50673 Serverius', count: 1 },
-        { name: 'AS24434 Telkomsel', count: 1 },
-      ],
-      topAttackTypes: [
-        { type: 'path_traversal', count: 3 },
-        { type: 'sql_injection', count: 2 },
-        { type: 'command_injection', count: 1 },
-      ],
-      topMitre: [
-        { id: 'T1190', name: 'Exploit Public-Facing Application', count: 3 },
-        { id: 'T1595.002', name: 'Vulnerability Scanning', count: 2 },
-        { id: 'T1083', name: 'File and Directory Discovery', count: 2 },
-      ],
-      outcomeDistribution: [
-        { outcome: 'blocked', count: 3 },
-        { outcome: 'failed', count: 1 },
-        { outcome: 'unspecified', count: 4 },
-      ],
-      timeline: [
-        { date: 'Day -5', attacks: 12 },
-        { date: 'Day -4', attacks: 25 },
-        { date: 'Day -3', attacks: 18 },
-        { date: 'Day -2', attacks: 42 },
-        { date: 'Day -1', attacks: 31 },
-        { date: 'Today', attacks: 15 },
-      ],
-    };
-  }
-
-  const [countries, attackTypes, mitre, outcomes, timeline] = await Promise.all([
-    query<{ code: string; count: string }>(
-      `SELECT country_code AS code, COUNT(*) AS count
-         FROM ip_intel_cache
-        WHERE country_code IS NOT NULL
-        GROUP BY country_code
-        ORDER BY count DESC
-        LIMIT 10`
-    ),
-    query<{ type: string; count: string }>(
-      `SELECT unnest(attack_types) AS type, COUNT(*) AS count
-         FROM ip_intel_cache
-        GROUP BY type
-        ORDER BY count DESC
-        LIMIT 10`
-    ),
-    query<{ id: string; count: string }>(
-      `SELECT unnest(mitre_tactics) AS id, COUNT(*) AS count
-         FROM ip_intel_cache
-        GROUP BY id
-        ORDER BY count DESC
-        LIMIT 10`
-    ),
-    query<{ outcome: string; count: string }>(
-      `SELECT COALESCE(outcome, 'unspecified') AS outcome, COUNT(*) AS count
-         FROM ip_intel_events
-        GROUP BY outcome
-        ORDER BY count DESC`
-    ),
-    query<{ date: string; count: string }>(
-      `SELECT TO_CHAR(seen_at, 'YYYY-MM-DD') AS date, COUNT(*) AS count
-         FROM ip_intel_events
-        WHERE seen_at >= NOW() - ($1 || ' days')::INTERVAL
-        GROUP BY date
-        ORDER BY date ASC`,
-      [days.toString()]
-    ),
-  ]);
-
-  return {
-    topCountries: countries.map((c) => ({ code: c.code, count: parseInt(c.count, 10) })),
-    topAttackTypes: attackTypes.map((a) => ({ type: a.type, count: parseInt(a.count, 10) })),
-    topMitre: mitre.map((m) => ({ id: m.id, count: parseInt(m.count, 10) })),
-    outcomeDistribution: outcomes.map((o) => ({ outcome: o.outcome, count: parseInt(o.count, 10) })),
-    timeline: timeline.map((t) => ({ date: t.date, attacks: parseInt(t.count, 10) })),
-  };
+export async function getDashboardAnalytics(days=30,explicitScope?:TelemetryScope) {
+ const to=new Date().toISOString(),scope=explicitScope??{from:new Date(Date.parse(to)-days*86400000).toISOString(),to};
+ const rank=(values:(string|null|undefined)[])=>{const map=new Map<string,number>();for(const v of values)if(v)map.set(v,(map.get(v)??0)+1);return [...map].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,10);};
+ if(isMock){
+  const events=filterEvents(MOCK_IP_EVENTS,scope),cache=new Map(mockIntels().map(c=>[c.ip,c]));
+  const countries=rank(events.map(e=>cache.get(e.ip)?.country_code)),asns=rank(events.map(e=>cache.get(e.ip)?.isp)),types=rank(events.map(e=>e.attack_subtype)),mitre=rank(events.flatMap(e=>e.mitre)),outcomes=rank(events.map(e=>e.outcome??'unspecified'));
+  const timeline=new Map<string,number>();for(const e of events){const d=new Date(e.seen_at).toISOString().slice(0,10);timeline.set(d,(timeline.get(d)??0)+1);}
+  return {scope,units:{topCountries:'events',topAsns:'events',topAttackTypes:'events',topMitre:'event-technique associations',outcomeDistribution:'events',timeline:'events'},topCountries:countries.map(([code,count])=>({code,count})),topAsns:asns.map(([name,count])=>({name,count})),topAttackTypes:types.map(([type,count])=>({type,count})),topMitre:mitre.map(([id,count])=>({id,count})),outcomeDistribution:outcomes.map(([outcome,count])=>({outcome,count})),timeline:[...timeline].sort().map(([date,attacks])=>({date,attacks}))};
+ }
+ const {where,params}=eventPredicate(null,scope);
+ const aggregate=async(expression:string,join='')=>query<{key:string;count:string}>(`WITH scoped AS (SELECT * FROM ip_intel_events WHERE ${where}) SELECT ${expression} AS key,COUNT(*) AS count FROM scoped e ${join} GROUP BY key ORDER BY count DESC,key LIMIT 10`,params);
+ const [countries,asns,types,mitre,outcomes,timeline]=await Promise.all([
+  aggregate('intel.country_code',`JOIN ${intelRelation} ON intel.ip=e.ip WHERE intel.country_code IS NOT NULL`),
+  aggregate('intel.isp',`JOIN ${intelRelation} ON intel.ip=e.ip WHERE intel.isp IS NOT NULL`),
+  aggregate('e.attack_subtype','WHERE e.attack_subtype IS NOT NULL'),
+  aggregate('m.id','CROSS JOIN LATERAL unnest(e.mitre) m(id)'),
+  aggregate("COALESCE(e.outcome,'unspecified')"),
+  query<{date:string;count:string}>(`SELECT TO_CHAR(seen_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS date,COUNT(*) AS count FROM ip_intel_events WHERE ${where} GROUP BY date ORDER BY date`,params)
+ ]);
+ return {scope,units:{topCountries:'events',topAsns:'events',topAttackTypes:'events',topMitre:'event-technique associations',outcomeDistribution:'events',timeline:'events'},topCountries:countries.map(r=>({code:r.key,count:Number(r.count)})),topAsns:asns.map(r=>({name:r.key,count:Number(r.count)})),topAttackTypes:types.map(r=>({type:r.key,count:Number(r.count)})),topMitre:mitre.map(r=>({id:r.key,count:Number(r.count)})),outcomeDistribution:outcomes.map(r=>({outcome:r.key,count:Number(r.count)})),timeline:timeline.map(r=>({date:r.date,attacks:Number(r.count)}))};
 }
 
 export interface ProviderSummary {
   isp: string;
   ip_count: number;
   total_alerts: number;
-  max_abuse_score: number;
-  avg_abuse_score: number;
+  max_abuse_score: number|null;
+  avg_abuse_score: number|null;
   countries: string[];
   asns: string[];
-  last_seen: string;
+  last_seen: string|null;
 }
 
 export interface ProviderDetail {
   summary: ProviderSummary | null;
   attackTypes: { type: string; count: number }[];
   targetHosts: { host: string; count: number }[];
-  ips: IpIntelCacheRow[];
+  ips: IntelRow[];
 }
 
 export async function searchProviders(
@@ -445,10 +330,10 @@ export async function searchProviders(
       scores: number[];
       countries: Set<string>;
       asns: Set<string>;
-      last_seen: string;
+      last_seen: string|null;
     }>();
 
-    for (const row of MOCK_IP_CACHE) {
+    for (const row of mockIntels()) {
       if (!row.isp) continue;
       const matches =
         !clean ||
@@ -471,11 +356,11 @@ export async function searchProviders(
 
       const p = map.get(row.isp)!;
       p.ips.push(row.ip);
-      p.total_alerts += row.total_alert_count || 1;
+      p.total_alerts += row.total_alert_count ?? 0;
       if (row.abuse_score !== null) p.scores.push(row.abuse_score);
       if (row.country_code) p.countries.add(row.country_code);
       if (row.geo_json?.as) p.asns.add(row.geo_json.as);
-      if (new Date(row.last_seen) > new Date(p.last_seen)) {
+      if (row.last_seen !== null && (p.last_seen === null || row.last_seen > p.last_seen)) {
         p.last_seen = row.last_seen;
       }
     }
@@ -485,9 +370,9 @@ export async function searchProviders(
         isp: p.isp,
         ip_count: p.ips.length,
         total_alerts: p.total_alerts,
-        max_abuse_score: p.scores.length > 0 ? Math.max(...p.scores) : 0,
+        max_abuse_score: p.scores.length > 0 ? Math.max(...p.scores) : null,
         avg_abuse_score:
-          p.scores.length > 0 ? Math.round(p.scores.reduce((a, b) => a + b, 0) / p.scores.length) : 0,
+          p.scores.length > 0 ? Math.round(p.scores.reduce((a, b) => a + b, 0) / p.scores.length) : null,
         countries: Array.from(p.countries),
         asns: Array.from(p.asns),
         last_seen: p.last_seen,
@@ -503,7 +388,7 @@ export async function searchProviders(
   const [countRes, listRes] = await Promise.all([
     query<{ total: string }>(
       `SELECT COUNT(DISTINCT isp) AS total
-         FROM ip_intel_cache
+         FROM ${intelRelation}
         WHERE isp IS NOT NULL
           AND ($1 = '' OR isp ILIKE '%' || $1 || '%' OR (geo_json->>'as') ILIKE '%' || $1 || '%')`,
       [clean]
@@ -512,21 +397,21 @@ export async function searchProviders(
       isp: string;
       ip_count: string;
       total_alerts: string;
-      max_abuse_score: string;
-      avg_abuse_score: string;
+      max_abuse_score: string|null;
+      avg_abuse_score: string|null;
       countries: string[];
       asns: string[];
-      last_seen: string;
+      last_seen: string|null;
     }>(
       `SELECT isp,
               COUNT(*)::int AS ip_count,
               SUM(total_alert_count)::int AS total_alerts,
               MAX(abuse_score)::int AS max_abuse_score,
-              ROUND(AVG(COALESCE(abuse_score, 0)))::int AS avg_abuse_score,
+              ROUND(AVG(abuse_score))::int AS avg_abuse_score,
               ARRAY_AGG(DISTINCT country_code) FILTER (WHERE country_code IS NOT NULL) AS countries,
               ARRAY_AGG(DISTINCT (geo_json->>'as')) FILTER (WHERE geo_json->>'as' IS NOT NULL) AS asns,
               MAX(last_seen) AS last_seen
-         FROM ip_intel_cache
+         FROM ${intelRelation}
         WHERE isp IS NOT NULL
           AND ($1 = '' OR isp ILIKE '%' || $1 || '%' OR (geo_json->>'as') ILIKE '%' || $1 || '%')
         GROUP BY isp
@@ -541,8 +426,8 @@ export async function searchProviders(
     isp: r.isp,
     ip_count: parseInt(r.ip_count, 10),
     total_alerts: parseInt(r.total_alerts, 10),
-    max_abuse_score: parseInt(r.max_abuse_score || '0', 10),
-    avg_abuse_score: parseInt(r.avg_abuse_score || '0', 10),
+    max_abuse_score: r.max_abuse_score == null ? null : Number(r.max_abuse_score),
+    avg_abuse_score: r.avg_abuse_score == null ? null : Number(r.avg_abuse_score),
     countries: r.countries || [],
     asns: r.asns || [],
     last_seen: r.last_seen,
@@ -551,20 +436,25 @@ export async function searchProviders(
   return { providers, total };
 }
 
-export async function getProviderDetail(ispName: string): Promise<ProviderDetail> {
+export async function getProviderIps(name:string,limit=100,offset=0):Promise<{items:IntelRow[];total:number}> {
+ if(!Number.isInteger(limit)||limit<1||limit>10000||!Number.isInteger(offset)||offset<0||offset>1000000)throw new Error('Invalid roster bounds');
+ if(isMock){const all=mockIntels().filter(c=>c.isp===name).sort((a,b)=>b.total_alert_count-a.total_alert_count||a.ip.localeCompare(b.ip));return {items:all.slice(offset,offset+limit),total:all.length};}
+ const [count,items]=await Promise.all([query<{count:string}>(`SELECT COUNT(*) AS count FROM ${intelRelation} WHERE isp=$1`,[name]),query<IntelRow>(`SELECT * FROM ${intelRelation} WHERE isp=$1 ORDER BY total_alert_count DESC,ip LIMIT $2 OFFSET $3`,[name,limit,offset])]);return {items,total:Number(count[0]?.count??0)};
+}
+export async function getProviderDetail(ispName: string,limit=100,offset=0): Promise<ProviderDetail> {
   const cleanIsp = ispName.trim();
 
   if (isMock) {
-    const ips = MOCK_IP_CACHE.filter((c) => c.isp === cleanIsp);
+    const ips = mockIntels().filter((c) => c.isp === cleanIsp);
     if (ips.length === 0) {
       return { summary: null, attackTypes: [], targetHosts: [], ips: [] };
     }
 
-    const scores = ips.map((c) => c.abuse_score || 0);
-    const totalAlerts = ips.reduce((sum, c) => sum + (c.total_alert_count || 1), 0);
+    const scores = ips.map((c) => c.abuse_score).filter((score):score is number=>score!==null);
+    const totalAlerts = ips.reduce((sum, c) => sum + (c.total_alert_count ?? 0), 0);
     const countries = Array.from(new Set(ips.map((c) => c.country_code).filter(Boolean))) as string[];
     const asns = Array.from(new Set(ips.map((c) => c.geo_json?.as).filter(Boolean))) as string[];
-    const lastSeen = ips.reduce((latest, c) => (c.last_seen > latest ? c.last_seen : latest), ips[0].last_seen);
+    const lastSeen = ips.reduce<string|null>((latest, c) => (c.last_seen !== null && (latest === null || c.last_seen > latest) ? c.last_seen : latest), null);
 
     const attackMap = new Map<string, number>();
     for (const row of ips) {
@@ -591,15 +481,15 @@ export async function getProviderDetail(ispName: string): Promise<ProviderDetail
         isp: cleanIsp,
         ip_count: ips.length,
         total_alerts: totalAlerts,
-        max_abuse_score: Math.max(...scores),
-        avg_abuse_score: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+        max_abuse_score: scores.length ? Math.max(...scores) : null,
+        avg_abuse_score: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
         countries,
         asns,
         last_seen: lastSeen,
       },
       attackTypes,
       targetHosts,
-      ips: [...ips].sort((a, b) => b.total_alert_count - a.total_alert_count),
+      ips: [...ips].sort((a, b) => b.total_alert_count - a.total_alert_count).slice(offset,offset+limit),
     };
   }
 
@@ -608,28 +498,28 @@ export async function getProviderDetail(ispName: string): Promise<ProviderDetail
       isp: string;
       ip_count: string;
       total_alerts: string;
-      max_abuse_score: string;
-      avg_abuse_score: string;
+      max_abuse_score: string|null;
+      avg_abuse_score: string|null;
       countries: string[];
       asns: string[];
-      last_seen: string;
+      last_seen: string|null;
     }>(
       `SELECT isp,
               COUNT(*)::int AS ip_count,
               SUM(total_alert_count)::int AS total_alerts,
               MAX(abuse_score)::int AS max_abuse_score,
-              ROUND(AVG(COALESCE(abuse_score, 0)))::int AS avg_abuse_score,
+              ROUND(AVG(abuse_score))::int AS avg_abuse_score,
               ARRAY_AGG(DISTINCT country_code) FILTER (WHERE country_code IS NOT NULL) AS countries,
               ARRAY_AGG(DISTINCT (geo_json->>'as')) FILTER (WHERE geo_json->>'as' IS NOT NULL) AS asns,
               MAX(last_seen) AS last_seen
-         FROM ip_intel_cache
+         FROM ${intelRelation}
         WHERE isp = $1
         GROUP BY isp`,
       [cleanIsp]
     ),
     query<{ type: string; count: string }>(
       `SELECT unnest(attack_types) AS type, COUNT(*)::int AS count
-         FROM ip_intel_cache
+         FROM ${intelRelation}
         WHERE isp = $1
         GROUP BY type
         ORDER BY count DESC
@@ -638,21 +528,21 @@ export async function getProviderDetail(ispName: string): Promise<ProviderDetail
     ),
     query<{ host: string; count: string }>(
       `SELECT unnest(target_hosts) AS host, COUNT(*)::int AS count
-         FROM ip_intel_cache
+         FROM ${intelRelation}
         WHERE isp = $1
         GROUP BY host
         ORDER BY count DESC
         LIMIT 10`,
       [cleanIsp]
     ),
-    query<IpIntelCacheRow>(
+    query<IntelRow>(
       `SELECT ip, first_seen, last_seen, reputation_source,
               abuse_score, vt_malicious, country_code, isp,
               attack_types, mitre_tactics, target_hosts, total_alert_count
-         FROM ip_intel_cache
+         FROM ${intelRelation}
         WHERE isp = $1
-        ORDER BY total_alert_count DESC, abuse_score DESC NULLS LAST`,
-      [cleanIsp]
+        ORDER BY total_alert_count DESC, abuse_score DESC NULLS LAST LIMIT $2 OFFSET $3`,
+      [cleanIsp,limit,offset]
     ),
   ]);
 
@@ -665,8 +555,8 @@ export async function getProviderDetail(ispName: string): Promise<ProviderDetail
     isp: r.isp,
     ip_count: parseInt(r.ip_count, 10),
     total_alerts: parseInt(r.total_alerts, 10),
-    max_abuse_score: parseInt(r.max_abuse_score || '0', 10),
-    avg_abuse_score: parseInt(r.avg_abuse_score || '0', 10),
+    max_abuse_score: r.max_abuse_score == null ? null : Number(r.max_abuse_score),
+    avg_abuse_score: r.avg_abuse_score == null ? null : Number(r.avg_abuse_score),
     countries: r.countries || [],
     asns: r.asns || [],
     last_seen: r.last_seen,
@@ -680,124 +570,5 @@ export async function getProviderDetail(ispName: string): Promise<ProviderDetail
   };
 }
 
-export interface UpsertReputationParams {
-  ip: string;
-  abuseScore: number;
-  countryCode?: string | null;
-  isp?: string | null;
-  domain?: string | null;
-  usageType?: string | null;
-  totalReports?: number;
-  numDistinctUsers?: number;
-  lastReportedAt?: string | null;
-  reputationJson?: any;
-  geoJson?: any;
-}
-
-let localSyncPool: Pool | null = null;
-function getLocalSyncPool(): Pool {
-  if (!localSyncPool) {
-    localSyncPool = new Pool({
-      connectionString: 'postgresql://soc_readonly:REDACTED_PASSWORD@127.0.0.1:5432/abuseip',
-      max: 2,
-      idleTimeoutMillis: 10000,
-      connectionTimeoutMillis: 2000,
-    });
-    localSyncPool.on('error', () => {});
-  }
-  return localSyncPool;
-}
-
-/**
- * Upsert threat intelligence reputation data for an IP into PostgreSQL ip_intel_cache.
- * Synchronizes primary database (remote 10.0.0.1) and local database if available.
- */
-export async function upsertIpIntelReputation(params: UpsertReputationParams): Promise<void> {
-  const cleanIp = params.ip.trim();
-
-  if (isMock) {
-    const existing = MOCK_IP_CACHE.find((c) => c.ip === cleanIp);
-    if (existing) {
-      existing.abuse_score = params.abuseScore;
-      existing.reputation_source = 'abuseipdb';
-      existing.country_code = params.countryCode || existing.country_code;
-      existing.isp = params.isp || existing.isp;
-      existing.reputation_checked_at = new Date().toISOString();
-      existing.reputation_json = params.reputationJson;
-      existing.geo_json = params.geoJson;
-    } else {
-      MOCK_IP_CACHE.push({
-        ip: cleanIp,
-        first_seen: new Date().toISOString(),
-        last_seen: new Date().toISOString(),
-        last_alert_id: null,
-        reputation_source: 'abuseipdb',
-        abuse_score: params.abuseScore,
-        vt_malicious: null,
-        country_code: params.countryCode || 'XX',
-        isp: params.isp || 'Unknown',
-        geo_json: params.geoJson || null,
-        reputation_json: params.reputationJson || null,
-        attack_types: [],
-        mitre_tactics: [],
-        target_hosts: [],
-        endpoints_targeted: [],
-        http_methods_used: [],
-        total_alert_count: 0,
-        notes: null,
-        reputation_checked_at: new Date().toISOString(),
-      });
-    }
-    return;
-  }
-
-  const sql = `
-    INSERT INTO ip_intel_cache (
-      ip, last_seen, reputation_checked_at, reputation_source,
-      abuse_score, country_code, isp, geo_json, reputation_json,
-      total_alert_count, attack_types, mitre_tactics, target_hosts,
-      endpoints_targeted, http_methods_used
-    ) VALUES ($1, NOW(), NOW(), 'abuseipdb', $2, $3, $4, $5, $6, 0, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[])
-    ON CONFLICT (ip) DO UPDATE SET
-      reputation_checked_at = NOW(),
-      reputation_source = 'abuseipdb',
-      abuse_score = EXCLUDED.abuse_score,
-      country_code = COALESCE(EXCLUDED.country_code, ip_intel_cache.country_code),
-      isp = COALESCE(EXCLUDED.isp, ip_intel_cache.isp),
-      geo_json = COALESCE(EXCLUDED.geo_json, ip_intel_cache.geo_json),
-      reputation_json = EXCLUDED.reputation_json
-  `;
-
-  const values = [
-    cleanIp,
-    params.abuseScore,
-    params.countryCode || null,
-    params.isp || null,
-    params.geoJson ? JSON.stringify(params.geoJson) : null,
-    params.reputationJson ? JSON.stringify(params.reputationJson) : null,
-  ];
-
-  // 1. Primary DB (pointed by DATABASE_URL, e.g. 10.0.0.1)
-  const client = await getPool().connect();
-  try {
-    await client.query(sql, values);
-  } finally {
-    client.release();
-  }
-
-  // 2. Parity sync to local DB if primary is remote
-  const primaryConn = process.env.DATABASE_URL || '';
-  if (primaryConn && !primaryConn.includes('127.0.0.1') && !primaryConn.includes('localhost')) {
-    try {
-      const localClient = await getLocalSyncPool().connect();
-      try {
-        await localClient.query(sql, values);
-      } finally {
-        localClient.release();
-      }
-    } catch {
-      // Local sync is best-effort fallback
-    }
-  }
-}
-
+export interface UpsertReputationParams extends ReputationWrite { domain?:string|null;usageType?:string|null;totalReports?:number;numDistinctUsers?:number;lastReportedAt?:string|null }
+export async function upsertIpIntelReputation(params:UpsertReputationParams):Promise<void> { await saveReputation(params); }

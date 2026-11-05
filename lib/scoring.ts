@@ -54,7 +54,7 @@ export function isCriticalOutcome(outcome?: string | null): boolean {
 /**
  * Calculates threat verdict score from external reputation & local SOC telemetry.
  */
-export function calculateVerdictScore(input: ScoreInput): ScoreBreakdown {
+export function calculateVerdictScore(input: ScoreInput, now: Date = new Date()): ScoreBreakdown {
   const hasAbuse = input.abuseScore !== null && input.abuseScore !== undefined;
   const rawAbuse = hasAbuse ? Math.max(0, Math.min(100, Number(input.abuseScore))) : null;
 
@@ -72,8 +72,8 @@ export function calculateVerdictScore(input: ScoreInput): ScoreBreakdown {
   }
 
   // --- Local Signal Calculation (0 - 100) ---
-  const alertCount = Math.max(0, Number(input.totalAlertCount || 1));
-  const distinctTargets = Math.max(1, Number(input.distinctTargetsCount || 1));
+  const alertCount = Math.max(0, Number(input.totalAlertCount ?? 0));
+  const distinctTargets = alertCount > 0 ? Math.max(0, Number(input.distinctTargetsCount ?? 0)) : 0;
 
   // 1. Volume component: logarithmic scaling up to 45 pts
   const volumeScore = Math.min(45, Math.round(Math.log2(alertCount + 1) * 8));
@@ -85,7 +85,6 @@ export function calculateVerdictScore(input: ScoreInput): ScoreBreakdown {
   let recencyMultiplier = 0.5;
   if (input.lastSeen) {
     const lastSeenDate = new Date(input.lastSeen);
-    const now = new Date();
     const hoursSinceLastSeen = Math.max(0, (now.getTime() - lastSeenDate.getTime()) / (1000 * 60 * 60));
 
     if (hoursSinceLastSeen <= 24) {
@@ -109,9 +108,9 @@ export function calculateVerdictScore(input: ScoreInput): ScoreBreakdown {
   );
 
   // --- Weight Allocation & Dynamic Re-normalization ---
-  let baseWeightAbuse = hasAbuse ? 0.4 : 0;
-  let baseWeightVT = hasVT ? 0.3 : 0;
-  let baseWeightLocal = 0.3;
+  const baseWeightAbuse = hasAbuse ? 0.4 : 0;
+  const baseWeightVT = hasVT ? 0.3 : 0;
+  const baseWeightLocal = 0.3;
 
   const totalBaseWeight = baseWeightAbuse + baseWeightVT + baseWeightLocal;
   const weightAbuse = Number((baseWeightAbuse / totalBaseWeight).toFixed(3));

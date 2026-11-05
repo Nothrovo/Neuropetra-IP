@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertOctagon, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { AlertOctagon } from 'lucide-react';
 
 export default function OutcomePanel({
   outcomes,

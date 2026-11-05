@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { groupTechniquesByTactic, MITRE_TACTICS } from '@/lib/mitre-matrix';
-import { ExternalLink, Shield, CheckCircle2, ArrowRight } from 'lucide-react';
+import { ExternalLink, Shield, ArrowRight } from 'lucide-react';
 
 export default function MitreHeatmap({ techniques }: { techniques: string[] }) {
   if (!techniques || techniques.length === 0) {

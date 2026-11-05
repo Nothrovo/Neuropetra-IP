@@ -1,22 +1,8 @@
-import { NextResponse } from 'next/server';
-import { getDashboardAnalytics } from '@/lib/db';
-import { checkRateLimit } from '@/lib/rate-limit';
-
-export async function GET(request: Request) {
-  const clientIp = request.headers.get('x-forwarded-for') || '127.0.0.1';
-  const { allowed } = checkRateLimit(`dashboard:${clientIp}`, 30, 0.5);
-  if (!allowed) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const days = parseInt(searchParams.get('days') || '30', 10);
-
-  try {
-    const data = await getDashboardAnalytics(days);
-    return NextResponse.json({ success: true, ...data });
-  } catch (err: any) {
-    console.error('[API /dashboard Error]', err);
-    return NextResponse.json({ error: 'Failed to retrieve analytics' }, { status: 500 });
-  }
-}
+import {getDashboardAnalytics} from '@/lib/db';
+import {withApiPermission} from '@/lib/authorization';
+import {apiError,parseTelemetryScope} from '@/lib/api-input';
+import {checkRateLimit} from '@/lib/rate-limit';
+export const GET=withApiPermission(async(request,_context,session)=>{
+ if(!checkRateLimit(`dashboard:${session.userId}`,30,0.5).allowed)return Response.json({error:'Rate limit exceeded'},{status:429});
+ try{const scope=parseTelemetryScope(new URL(request.url).searchParams);return Response.json({success:true,...await getDashboardAnalytics(30,scope)});}catch(error){return apiError(error);}
+},'read');

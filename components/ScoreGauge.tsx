@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ScoreBreakdown } from '@/lib/scoring';
-import { ChevronDown, ChevronUp, ShieldAlert, AlertTriangle, ShieldCheck, HelpCircle, Info } from 'lucide-react';
+import { ChevronDown, ChevronUp, ShieldAlert, AlertTriangle, ShieldCheck, HelpCircle } from 'lucide-react';
 
 export default function ScoreGauge({ scoring }: { scoring: ScoreBreakdown }) {
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -73,7 +73,7 @@ export default function ScoreGauge({ scoring }: { scoring: ScoreBreakdown }) {
           />
         </div>
         <div className="flex justify-between text-[10px] font-mono text-zinc-500">
-          <span>0 (Clean)</span>
+          <span>0 (No weighted signal)</span>
           <span>40 (Suspicious)</span>
           <span>75 (Malicious)</span>
           <span>100</span>
@@ -90,9 +90,9 @@ export default function ScoreGauge({ scoring }: { scoring: ScoreBreakdown }) {
         </div>
 
         <div className="rounded-lg border border-white/[0.06] bg-[#141824] p-2 space-y-0.5">
-          <span className="text-[10px] text-zinc-400 uppercase font-sans block truncate">VirusTotal Detections</span>
+          <span className="text-[10px] text-zinc-400 uppercase font-sans block truncate">VirusTotal Normalized Signal</span>
           <span className="font-semibold text-zinc-200 font-tabular">
-            {components.virustotal.rawScore !== null ? `${components.virustotal.rawScore}/100` : '0/100'}
+            {components.virustotal.rawScore !== null ? `${components.virustotal.rawScore}/100` : 'N/A'}
           </span>
         </div>
 

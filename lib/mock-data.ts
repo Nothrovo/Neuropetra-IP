@@ -19,7 +19,7 @@ export interface IpIntelCacheRow {
     isp: string;
     as?: string;
   } | null;
-  reputation_json: any;
+  reputation_json: Record<string, unknown> | null;
   attack_types: string[];
   mitre_tactics: string[];
   target_hosts: string[];

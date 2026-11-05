@@ -4,10 +4,8 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Activity,
   Globe2,
   TrendingUp,
-  Server,
   Layers,
   ShieldAlert,
   Building2,
@@ -22,11 +20,13 @@ import {
   CartesianGrid,
 } from 'recharts';
 import MitreHeatmap from '@/components/MitreHeatmap';
+import type { getDashboardAnalytics } from '@/lib/db';
+type DashboardResponse = Awaited<ReturnType<typeof getDashboardAnalytics>>;
 
 export default function DashboardPage() {
   const [days, setDays] = useState(30);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery<DashboardResponse>({
     queryKey: ['soc-analytics', days],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard?days=${days}`);
@@ -40,6 +40,8 @@ export default function DashboardPage() {
   const topAttackTypes = data?.topAttackTypes || [];
   const topMitre = data?.topMitre || [];
   const outcomeDist = data?.outcomeDistribution || [];
+
+  if (isError) return <p role="alert">Failed to load dashboard data. Please retry.</p>;
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
@@ -55,7 +57,8 @@ export default function DashboardPage() {
             </span>
           </div>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Macro-level incident volume, adversary origin geographies, and tactical attack vectors
+            All panels use the selected UTC half-open window [from, to).
+            {data?.scope && <span> {data.scope.from} to {data.scope.to} UTC</span>}
           </p>
         </div>
 
@@ -140,7 +143,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-3 pt-1">
-            {topAttackTypes.map((item: any) => {
+            {topAttackTypes.map((item) => {
               const max = topAttackTypes[0]?.count || 1;
               const pct = Math.round((item.count / max) * 100);
               return (
@@ -168,11 +171,11 @@ export default function DashboardPage() {
               <Globe2 className="h-4 w-4 text-zinc-400" />
               <span>Adversary Origin Geographies</span>
             </h3>
-            <p className="text-[11px] text-zinc-400">Threat actor origin country distribution</p>
+            <p className="text-[11px] text-zinc-400">Country attribution of events in the selected window; not unique IPs</p>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
-            {topCountries.map((c: any) => (
+            {topCountries.map((c) => (
               <div
                 key={c.code}
                 className="rounded-lg border border-white/[0.06] bg-[#141824] p-3 flex flex-col justify-between"
@@ -182,7 +185,7 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-zinc-500 font-mono">CC</span>
                 </div>
                 <div className="mt-2 text-xs font-mono font-medium text-zinc-300 font-tabular">
-                  {c.count} Unique IPs
+                  {c.count} events
                 </div>
               </div>
             ))}
@@ -190,8 +193,13 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <section className="rounded-xl border border-white/10 p-5 space-y-2">
+        <h2>Top ISPs — events in selected window</h2>
+        {(data?.topAsns ?? []).map(item => <p key={item.name}>{item.name}: {item.count} events</p>)}
+      </section>
+
       {/* Global MITRE Matrix Heatmap Card */}
-      <MitreHeatmap techniques={topMitre.map((m: any) => m.id)} />
+      <MitreHeatmap techniques={topMitre.map((m) => m.id)} />
 
       {/* Outcome Ratios Card */}
       <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] p-5 space-y-4">
@@ -204,7 +212,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono">
-          {outcomeDist.map((item: any) => {
+          {outcomeDist.map((item) => {
             const isCritical = ['success', 'compromised', 'allowed'].includes(item.outcome.toLowerCase());
             const isBlocked = ['blocked', 'denied', 'dropped'].some((b) => item.outcome.toLowerCase().includes(b));
             return (

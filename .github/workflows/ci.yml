@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      isolated_database_tests:
+        description: Run destructive HTTP/provisioning tests against a new disposable fixture only
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      RUN_DATABASE_TESTS: "0"
+      RUN_MAINTENANCE_SYNTHETIC_PG: "no"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned package manager
+        run: npm install --global pnpm@11.28.4
+      - name: Frozen dependency installation
+        run: pnpm install --frozen-lockfile
+      - name: Release source and Docker context boundary
+        run: node_modules/.bin/tsx scripts/check-release-boundary.ts
+      - name: Lint
+        run: pnpm lint
+      - name: Type check
+        run: pnpm typecheck
+      - name: Default tests (no database opt-in)
+        run: pnpm test
+      - name: Next.js production build
+        run: pnpm build
+      - name: Runtime Docker image build (no publish)
+        run: docker build --target runner --tag ip-intel:ci .
+
+  isolated-database:
+    if: github.event_name == 'workflow_dispatch' && inputs.isolated_database_tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      RUN_MAINTENANCE_SYNTHETIC_PG: "no"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned package manager and dependencies
+        run: |
+          npm install --global pnpm@11.28.4
+          pnpm install --frozen-lockfile
+      - name: Create private synthetic fixture credentials
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, secrets
+          directory = pathlib.Path('.secrets')
+          directory.mkdir(mode=0o700, exist_ok=True)
+          os.chmod(directory, 0o700)
+          path = directory / 'review-db.env'
+          fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+          with os.fdopen(fd, 'w') as stream:
+              stream.write('POSTGRES_PASSWORD=' + secrets.token_hex(32) + '\n')
+          PY
+      - name: Start only the disposable PostgreSQL fixture
+        run: |
+          docker run --detach --name ip-intel-implementation-test-db \
+            --env-file .secrets/review-db.env --env POSTGRES_DB=ip_intel_test \
+            --publish 127.0.0.1:55437:5432 \
+            --health-cmd='pg_isready -U postgres -d ip_intel_test' \
+            --health-interval=2s --health-timeout=3s --health-retries=30 \
+            postgres:16-alpine
+          for attempt in $(seq 1 60); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' ip-intel-implementation-test-db)" = healthy ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Initialize baseline in isolated fixture only
+        run: |
+          # Fixture baseline only; deployment uses the checksummed migration runner.
+          # Apply every migration so readiness includes the feed and maintenance markers.
+          for migration in migrations/[0-9][0-9][0-9]_*.sql; do
+            docker exec -i ip-intel-implementation-test-db \
+              psql --single-transaction -v ON_ERROR_STOP=1 -U postgres -d ip_intel_test < "$migration"
+          done
+      - name: Real HTTP, persisted account lifecycle and scoped provisioning tests
+        env:
+          RUN_DATABASE_TESTS: "1"
+        run: |
+          pnpm exec vitest run tests/operator-database.test.ts \
+            tests/account-lifecycle.test.ts tests/auth-live.test.ts --no-file-parallelism
+      - name: Remove disposable fixture and its credentials
+        if: always()
+        run: |
+          docker rm --force --volumes ip-intel-implementation-test-db || true
+          rm -f .secrets/review-db.env

@@ -6,23 +6,16 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search,
-  ShieldAlert,
-  Server,
-  Activity,
-  ArrowRight,
-  TrendingUp,
-  Globe2,
-  Clock,
-  Layers,
   ChevronRight,
   Building2,
-  Shield,
   FileDown,
   Sparkles,
-  AlertTriangle,
 } from 'lucide-react';
 import DefangButton from '@/components/DefangButton';
-import { validateIpOrCidr } from '@/lib/ip-validator';
+import { isValidIP, normalizeIp } from '@/lib/ip-validator';
+import type { GlobalStats, IntelRow } from '@/lib/db';
+import type { IpIntelEventRow } from '@/lib/mock-data';
+type StatsResponse = { stats: GlobalStats; topAttackers: IntelRow[]; recentEvents: IpIntelEventRow[] };
 
 export default function HomePage() {
   const router = useRouter();
@@ -30,7 +23,7 @@ export default function HomePage() {
   const [searchError, setSearchError] = useState('');
   const [searchMode, setSearchMode] = useState<'auto' | 'ip' | 'provider'>('auto');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery<StatsResponse>({
     queryKey: ['soc-stats'],
     queryFn: async () => {
       const res = await fetch('/api/stats');
@@ -49,15 +42,13 @@ export default function HomePage() {
       return;
     }
 
-    if (searchMode === 'ip') {
-      router.push(`/ip/${encodeURIComponent(clean)}`);
+    if (clean.includes('/') || (searchMode === 'ip' && !isValidIP(clean))) {
+      setSearchError('Enter a valid exact IP address; subnet lookup is not supported.');
       return;
     }
 
-    // Auto-detect mode
-    const v = validateIpOrCidr(clean);
-    if (v.valid) {
-      router.push(`/ip/${encodeURIComponent(clean)}`);
+    if (isValidIP(clean)) {
+      router.push(`/ip/${encodeURIComponent(normalizeIp(clean))}`);
     } else {
       router.push(`/providers?q=${encodeURIComponent(clean)}`);
     }
@@ -71,13 +62,15 @@ export default function HomePage() {
     searchMode === 'provider'
       ? 'Search network provider or ASN (e.g. Hostkey, DigitalOcean, AS208294)...'
       : searchMode === 'ip'
-      ? 'Enter IP address or CIDR block (e.g. 185.220.101.5, 192.168.1.0/24)...'
-      : 'Search IP, CIDR, or Provider (e.g. 185.220.101.5, Tor, AS208294)...';
+      ? 'Enter exact IPv4 or IPv6 address (e.g. 185.220.101.5)...'
+      : 'Search exact IP or Provider (e.g. 185.220.101.5, Tor, AS208294)...';
 
   // Calculate malicious percentage
   const totalTracked = stats?.ipsTracked || 0;
   const maliciousCount = stats?.maliciousCount || 0;
   const malPct = totalTracked > 0 ? Math.round((maliciousCount / totalTracked) * 100) : 0;
+
+  if (isError) return <p role="alert">Failed to load SOC statistics. Please retry.</p>;
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -147,7 +140,7 @@ export default function HomePage() {
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                IP / CIDR
+                Exact IP
               </button>
               <button
                 type="button"
@@ -166,11 +159,14 @@ export default function HomePage() {
             {/* Quick Actions */}
             <div className="flex items-center gap-2 text-xs">
               <Link
-                href="/enrich"
+                href="/investigate?mode=local"
                 className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 px-2.5 py-1 rounded border border-white/[0.08] bg-[#141824] hover:bg-white/[0.04] transition"
               >
                 <Sparkles className="h-3.5 w-3.5 text-amber-400/90" />
                 <span>Batch Investigation</span>
+              </Link>
+              <Link href="/investigate?mode=external" className="text-zinc-400 hover:text-zinc-200 px-2.5 py-1 rounded border border-white/[0.08]">
+                External Enrichment
               </Link>
               <Link
                 href="/blocklist"
@@ -281,7 +277,7 @@ export default function HomePage() {
                     </td>
                   </tr>
                 ) : (
-                  topAttackers.map((att: any) => {
+                  topAttackers.map((att) => {
                     const score = att.abuse_score ?? 0;
                     const isHigh = score >= 75;
                     const isMedium = score >= 40 && score < 75;
@@ -300,7 +296,7 @@ export default function HomePage() {
                             <span className="rounded bg-white/[0.06] px-1 py-0.2 text-[10px] font-mono text-zinc-400 border border-white/[0.08]">
                               {att.country_code || 'XX'}
                             </span>
-                            <span className="text-[11px] text-zinc-300 max-w-[130px] truncate" title={att.isp}>
+                            <span className="text-[11px] text-zinc-300 max-w-[130px] truncate" title={att.isp ?? undefined}>
                               {att.isp || 'Unknown ISP'}
                             </span>
                           </div>
@@ -318,7 +314,7 @@ export default function HomePage() {
                             {att.abuse_score !== null ? `${att.abuse_score}%` : 'N/A'}
                           </span>
                         </td>
-                        <td className="py-2.5 text-zinc-300 font-tabular">{att.total_alert_count || 1}</td>
+                        <td className="py-2.5 text-zinc-300 font-tabular">{att.total_alert_count ?? 0}</td>
                         <td className="py-2.5 pr-1 text-right">
                           <DefangButton ip={att.ip} />
                         </td>
@@ -349,7 +345,7 @@ export default function HomePage() {
             ) : recentEvents.length === 0 ? (
               <div className="py-8 text-center text-xs text-zinc-500 font-sans">No recent events observed.</div>
             ) : (
-              recentEvents.map((ev: any) => (
+              recentEvents.map((ev) => (
                 <div
                   key={ev.id}
                   className="rounded-lg border border-white/[0.06] bg-[#141824] p-3 hover:border-white/[0.14] transition space-y-1.5"
@@ -376,7 +372,7 @@ export default function HomePage() {
                       {ev.alert_type || 'alert'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 font-mono truncate" title={ev.raw_summary}>
+                  <p className="text-[11px] text-zinc-400 font-mono truncate" title={ev.raw_summary ?? undefined}>
                     {ev.raw_summary || ev.endpoint || 'Triggered detection rule'}
                   </p>
                 </div>

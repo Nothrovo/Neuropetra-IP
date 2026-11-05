@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileDown, ShieldAlert, Download, Sliders, Database, CheckCircle2 } from 'lucide-react';
+import { Download, Sliders, Database } from 'lucide-react';
 import DefangButton from '@/components/DefangButton';
 
 export default function BlocklistPage() {
@@ -11,7 +11,7 @@ export default function BlocklistPage() {
   const [days, setDays] = useState(30);
 
   // Fetch blocklist preview
-  const { data: previewData, isLoading } = useQuery({
+  const { data: previewData } = useQuery({
     queryKey: ['blocklist-preview', minScore, minAlerts, days],
     queryFn: async () => {
       const res = await fetch(

@@ -1,173 +1,121 @@
-# Database Schema & Performance Specification
+# Database schema and privilege contract
 
-Database: **`abuseip`** (PostgreSQL 16)  
-Access Model: **Read-Only Application Role**
+The source of truth is the versioned SQL in [`migrations/`](../migrations/), not a discovered operational database. This document describes the **fresh owned schema**, with no production row counts, observed provider distributions or performance claims. Use a dedicated application database (bundled name: `ip_intel`) on PostgreSQL 16. Installation procedures are in [OPERATIONS.md](OPERATIONS.md).
 
----
+## Explicit schema lifecycle
 
-## 1. Physical Schema Architecture
+`pnpm db:provision` creates fixed scoped login identities using generated protected role passwords, transfers ownership of `public` to `ip_intel_migration_login`, revokes public schema creation and grants database connectivity. It is a privileged **fresh-install operator** action, not a runtime action or password-rotation tool. Existing application login names cause refusal. These names are cluster-wide: do not assume multiple dedicated databases can independently reprovision the same names on one cluster.
 
-The database consists of two interrelated tables:
-1. `ip_intel_cache` — Primary IP reputation, geolocation, and cumulative threat aggregation table.
-2. `ip_intel_events` — Per-alert granular incident chronology table populated from Wazuh alerts.
+`pnpm db:migrate` uses only `MIGRATION_DATABASE_URL` or its `_FILE` variant. It takes an advisory lock, sorts `NNN_name.sql`, records SHA-256 checksums and applies each new file in its own transaction. It rejects changed applied SQL. Never mount this connection into the web app.
 
-```mermaid
-erDiagram
-    ip_intel_cache ||--o{ ip_intel_events : "1-to-N on ip"
-    ip_intel_cache {
-        text ip PK
-        timestamptz first_seen
-        timestamptz last_seen
-        text last_alert_id
-        text reputation_source
-        int abuse_score
-        int vt_malicious
-        text country_code
-        text isp
-        jsonb geo_json
-        jsonb reputation_json
-        text_array attack_types
-        text_array mitre_tactics
-        text_array target_hosts
-        text_array endpoints_targeted
-        text_array http_methods_used
-        int total_alert_count
-        text notes
-        timestamptz reputation_checked_at
-    }
-    ip_intel_events {
-        int id PK
-        text ip FK
-        timestamptz seen_at
-        text alert_type
-        text attack_subtype
-        text_array mitre
-        text target_host
-        text endpoint
-        text outcome
-        text raw_summary
-    }
-```
+Two distinct version tables exist:
 
----
+- `ip_intel_migration_history(name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`: authoritative script-level application/checksum history, maintained by the migration runner.
+- `ip_intel_schema_migrations(version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`: migration feature markers read by the app. These markers alone do not prove a full schema or grant audit. Readiness requires `001`, `002` and `004`, plus `003` when maintenance access is configured, and runs zero-row column/access probes for the consumed authentication/feed/telemetry/reputation relations and optional maintenance metadata. It does not prove write privileges, checksum validity or a tested recovery checkpoint.
 
-## 2. Table Specifications & Discovered Metadata
+### Migration inventory
+
+| File | Purpose |
+| --- | --- |
+| `001_initial.sql` | Telemetry compatibility validation, cache/events, owned reputation, group roles, baseline read/write grants. |
+| `002_auth.sql` | Durable installation marker, users, sessions, auth-attempt buckets and auth grants. |
+| `003_maintenance.sql` | Global reputation revision sequence/triggers, immutable maintenance plans, jobs, one-run retention policies, append-oriented audit and scoped grants. |
+| `004_feed_tokens.sql` | Hashed, scoped, expiring/revocable machine feed credentials. |
+
+The initial migration requires cache/events to be both present or both absent, validates all consumed column types (including text array element types) and refuses incompatible schemas. It does not automatically convert existing telemetry or validate every possible legacy constraint. Do not use this as a license to run it on a shared SOC database. Map/copy externally sourced data through an explicitly reviewed integration into the dedicated schema.
+
+## Connection and role split
+
+Login identities use independent generated passwords. Group roles are `NOLOGIN`; the migration identity owns application objects and is not a web credential. Runtime groups receive `USAGE` on `public`, not general schema creation.
+
+| Login identity | Runtime group | Purpose and grants |
+| --- | --- | --- |
+| `ip_intel_migration_login` | None | Owns migrated objects/schema; explicit migration job only. |
+| `ip_intel_auth_login` | `ip_intel_auth` | SELECT/INSERT/UPDATE/DELETE on users, sessions and auth attempts; SELECT/UPDATE on installation state; SELECT only on feed tokens. |
+| `ip_intel_read_login` | `ip_intel_read` | SELECT on cache, events, reputation and schema markers; SELECT on jobs, retention policies and audit. No telemetry mutations. |
+| `ip_intel_reputation_login` | `ip_intel_reputation` | SELECT/INSERT/UPDATE on owned reputation and revision sequence USAGE. No telemetry/account mutations or reputation DELETE. |
+| `ip_intel_maintenance_login` | `ip_intel_maintenance` | Optional: SELECT `(ip,revision,reputation_checked_at)`, UPDATE `(reputation_checked_at)`, DELETE on owned reputation, revision sequence USAGE; restricted plans/jobs/policies updates and SELECT/INSERT audit. No account or telemetry mutations. |
+
+Maintenance metadata grants: SELECT/INSERT on plans/jobs/policies; UPDATE only plan `state`, job `status,job_json` and policy `enabled`; SELECT/INSERT on audit with no UPDATE/DELETE. The runtime still performs application-level authorization and allowlisted scope validation: database credentials are not a user identity. The worker uses auth access separately to recheck the durable administrator; the maintenance identity cannot query accounts.
+
+There is no generic `DATABASE_URL` or PostgreSQL localhost fallback. Each runtime connection is configured explicitly via `AUTH_DATABASE_URL`, `READ_DATABASE_URL`, `REPUTATION_DATABASE_URL` and optionally `MAINTENANCE_DATABASE_URL`, or its `_FILE` counterpart. Configure only one source per secret. No runtime scope receives the provisioning/migration credential.
+
+## Telemetry resources (read-only to application runtime)
 
 ### `ip_intel_cache`
-- **Total Records (Discovered)**: ~465
-- **Primary Key**: `ip` (`TEXT`)
-- **Indexes**:
-  - `ip_intel_cache_pkey` — `btree (ip)`
-  - `idx_ip_intel_cache_last_seen` — `btree (last_seen)`
-  - `idx_ip_intel_cache_rep_check` — `btree (reputation_checked_at)`
 
-| Column Name | PostgreSQL Data Type | Nullable | Discovered Value Semantics |
-| :--- | :--- | :---: | :--- |
-| `ip` | `TEXT` | `NO` | IPv4 (e.g. `198.51.100.23`) or IPv6 address. |
-| `first_seen` | `TIMESTAMPTZ` | `NO` | Defaults to `NOW()`. First time the IP triggered a security alert. |
-| `last_seen` | `TIMESTAMPTZ` | `NO` | Defaults to `NOW()`. Most recent timestamp an alert arrived. |
-| `last_alert_id` | `TEXT` | `YES` | Wazuh alert ID or case tracking ID. |
-| `reputation_source` | `TEXT` | `YES` | `'abuseipdb'` (~90%) or `'virustotal'` (~10%). |
-| `abuse_score` | `INTEGER` | `YES` | AbuseIPDB confidence score (0 to 100). |
-| `vt_malicious` | `INTEGER` | `YES` | VirusTotal malicious analysis detections count. |
-| `country_code` | `TEXT` | `YES` | ISO Alpha-2 code (e.g., `ID`, `US`, `CN`, `DE`, `NL`). |
-| `isp` | `TEXT` | `YES` | ASN organization / ISP provider name. |
-| `geo_json` | `JSONB` | `YES` | Object with `{ country, countryCode, isp, as }`. |
-| `reputation_json` | `JSONB` | `YES` | Full raw API response payload from AbuseIPDB or VirusTotal v3. |
-| `attack_types` | `TEXT[]` | `YES` | Attack categories: `'path_traversal'`, `'sql_injection'`, `'command_injection'`. |
-| `mitre_tactics` | `TEXT[]` | `YES` | ATT&CK Technique IDs (e.g. `'T1595.002'`, `'T1498'`, `'T1055'`, `'T1083'`, `'T1190'`). |
-| `target_hosts` | `TEXT[]` | `YES` | Wazuh agent names targeted (e.g. `'srv-web-01'`, `'db-prod'`). |
-| `endpoints_targeted`| `TEXT[]` | `YES` | Target endpoints/URIs (up to 10 distinct per IP). |
-| `http_methods_used` | `TEXT[]` | `YES` | HTTP methods: `'GET'`, `'POST'`, `'HEAD'`. |
-| `total_alert_count` | `INTEGER` | `YES` | Defaults to `1`. Cumulative count of alerts associated with IP. |
-| `notes` | `TEXT` | `YES` | Internal analyst notes / incident tag. |
-| `reputation_checked_at` | `TIMESTAMPTZ` | `YES` | Cache freshness marker for the 7-day TTL expiration check. |
+| Columns | Type / fresh-schema contract |
+| --- | --- |
+| `ip` | `text PRIMARY KEY` |
+| `first_seen`, `last_seen` | `timestamptz NOT NULL`; **no default**—ingestion must supply observations. |
+| `last_alert_id`, `reputation_source`, `country_code`, `isp`, `notes` | Nullable `text` |
+| `abuse_score`, `vt_malicious` | Nullable `integer` (legacy/source-supplied fields). |
+| `geo_json`, `reputation_json` | Nullable `jsonb` |
+| `attack_types`, `mitre_tactics`, `target_hosts`, `endpoints_targeted`, `http_methods_used` | `text[] NOT NULL DEFAULT '{}'` |
+| `total_alert_count` | `integer NOT NULL DEFAULT 0` |
+| `reputation_checked_at` | Nullable `timestamptz` |
 
----
+`mitre_tactics` is a historical column name that can hold ATT&CK technique/sub-technique IDs; rendering maps known IDs to tactics. A source-provided `vt_malicious` field is not evidence of a live VirusTotal integration. The product does not ship an automatically configured SOC collector, schema rewrite or account with telemetry ingestion permissions.
 
 ### `ip_intel_events`
-- **Total Records (Discovered)**: ~573
-- **Primary Key**: `id` (`SERIAL`)
-- **Foreign Key**: `ip REFERENCES ip_intel_cache(ip) ON DELETE CASCADE`
-- **Indexes**:
-  - `ip_intel_events_pkey` — `btree (id)`
-  - `idx_ip_intel_events_ip` — `btree (ip)`
-  - `idx_ip_intel_events_seen_at` — `btree (seen_at)`
 
-| Column Name | PostgreSQL Data Type | Nullable | Discovered Value Semantics |
-| :--- | :--- | :---: | :--- |
-| `id` | `INTEGER` | `NO` | Unique auto-incrementing serial sequence. |
-| `ip` | `TEXT` | `NO` | Attacker IP referencing `ip_intel_cache.ip`. |
-| `seen_at` | `TIMESTAMPTZ` | `NO` | Exact timestamp of the event. |
-| `alert_type` | `TEXT` | `YES` | General alert type (`'attack'` 99.8%, `'system'` 0.2%). |
-| `attack_subtype` | `TEXT` | `YES` | Specific vulnerability/attack category (`'path_traversal'`, `'sql_injection'`, `'command_injection'`). |
-| `mitre` | `TEXT[]` | `YES` | Per-event MITRE ATT&CK technique IDs. |
-| `target_host` | `TEXT` | `YES` | Host/agent where the alert triggered. |
-| `endpoint` | `TEXT` | `YES` | HTTP request URI or affected service endpoint. |
-| `outcome` | `TEXT` | `YES` | Attack outcome (e.g. `'blocked'`, `'failed'`, `'success'`). Currently `NULL` in legacy alerts. |
-| `raw_summary` | `TEXT` | `YES` | Log line or Wazuh rule description snippet. |
+| Columns | Type / fresh-schema contract |
+| --- | --- |
+| `id` | `bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY` |
+| `ip` | `text NOT NULL REFERENCES ip_intel_cache(ip) ON DELETE RESTRICT` |
+| `seen_at` | `timestamptz NOT NULL`; ingestion must supply it. |
+| `alert_type`, `attack_subtype`, `target_host`, `endpoint`, `outcome`, `raw_summary` | Nullable `text` |
+| `mitre` | `text[] NOT NULL DEFAULT '{}'` |
 
----
+Events require a parent cache record. Deleting a cache row does **not** cascade away evidence in the fresh schema. The app maintenance feature never deletes cache/events. Nullable/unknown outcomes are not proof of successful compromise or successful defense. Event pages order by timestamp and unique ID to avoid ambiguity on timestamp ties. Scoped evidence/aggregate filters use half-open UTC time windows (`from <= seen_at < to`).
 
-## 3. Data Normalization & Value Mapping Plan
+## Owned reputation
 
-### A. MITRE ATT&CK Normalization
-The database columns `ip_intel_cache.mitre_tactics` and `ip_intel_events.mitre` store technique/sub-technique IDs rather than tactic names.
+`ip_intel_reputation` is separate from the telemetry parent and intentionally has **no FK dependency on cache**. Reputation-only indicators can exist with no local first/last-seen timestamps or alert count.
 
-The application maps technique IDs to enterprise MITRE tactics:
-- **T1595 / T1595.002**: Active Scanning: Vulnerability Scanning $\rightarrow$ **Reconnaissance** (TA0043)
-- **T1190**: Exploit Public-Facing Application $\rightarrow$ **Initial Access** (TA0001)
-- **T1055**: Process Injection $\rightarrow$ **Defense Evasion** (TA0005) / **Privilege Escalation** (TA0004)
-- **T1083**: File and Directory Discovery $\rightarrow$ **Discovery** (TA0007)
-- **T1498**: Network Denial of Service $\rightarrow$ **Impact** (TA0040)
+| Columns | Contract |
+| --- | --- |
+| `ip` | `text PRIMARY KEY` |
+| `abuse_score` | Nullable `integer CHECK (abuse_score BETWEEN 0 AND 100)` |
+| `country_code`, `isp` | Nullable `text` |
+| `geo_json`, `reputation_json` | Nullable `jsonb` |
+| `reputation_checked_at` | Nullable `timestamptz`; invalidation clears this field. |
+| `revision` | `bigint NOT NULL DEFAULT 1`, replaced on INSERT/UPDATE by the global sequence trigger after migration 003. |
 
-### B. Outcome Classification & Critical Alerting
-Since historical events have `NULL` outcomes, the application classifies values into standardized groups:
-1. **Critical / Compromised**:
-   - Values: `'success'`, `'compromised'`, `'allowed'`, `'pwned'`, `'bypassed'`
-   - Visual: Red badge `#ef4444` + Sticky critical warning banner on IP detail page hero.
-2. **Defended / Mitigated**:
-   - Values: `'blocked'`, `'denied'`, `'dropped'`, `'filtered'`, `'403'`
-   - Visual: Emerald badge `#10b981`.
-3. **Attempted / Failed**:
-   - Values: `'failed'`, `'404'`, `'500'`
-   - Visual: Amber/Zinc badge `#f59e0b`.
-4. **Unknown / Unspecified**:
-   - Values: `NULL`, `''`, `'unknown'`
-   - Visual: Neutral slate badge `#64748b` (Treated as non-critical passive monitoring).
+Enrichment updates only this owned resource, not cache timestamps/counts or events. Reads merge owned reputation with available telemetry. The global monotonic `ip_intel_reputation_revision_seq` detects changed snapshots and delete/reinsert ABA; do not disable its triggers or reset it while old plans exist. Neither a missing reputation record nor a null provider score is a clean bill of health.
 
----
+Maintenance requires operator attestation of exclusive ownership and checks for **any inbound FK** to reputation. Even an inbound non-cascading dependency disables maintenance. New schema dependencies must be reviewed before enabling it.
 
-## 4. Query Analysis & Index Optimization Recommendations
+## Authentication and setup
 
-> [!NOTE]
-> Since the application operates with a **strictly read-only role**, these indexes are documentation recommendations for the database administrator (DBA) and must NOT be applied by the app.
+| Table | Contract |
+| --- | --- |
+| `ip_intel_installation` | Singleton boolean PK constrained true; nullable `installed_at`, `bootstrap_hash`, `bootstrap_expires_at`; hash and expiry must be present/absent together. Initial singleton row is seeded without a user or password. |
+| `ip_intel_users` | UUID PK, unique non-null username, non-null scrypt password hash, role constrained to `analyst`/`admin`, disabled flag default false, creation timestamp. |
+| `ip_intel_sessions` | SHA-256 `token_hash` text PK, UUID user FK with `ON DELETE CASCADE`, non-null expiry/recent-auth/creation timestamps, nullable revocation timestamp. User lookup index is created. |
+| `ip_intel_auth_attempts` | Bucket text PK, non-null window-start timestamp and integer attempts. Persists authentication throttling state. |
 
-### Recommended DBA Indexes:
+The setup token is a 32-byte random opaque value delivered only through a newly created protected host file, hashed in PostgreSQL and valid for 30 minutes. Completing setup atomically locks the singleton, verifies unused authorization, creates the owner-selected administrator and clears bootstrap fields. Installed state is durable even if users are later removed; database failure is not treated as permission to reopen setup. Sessions are opaque server-side credentials, not trusted role-bearing JSON cookies. Password reset revokes all sessions for the account.
 
-```sql
--- 1. GIN index for fast array containment queries on attack_types
--- Useful for: WHERE attack_types @> ARRAY['sql_injection']
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ip_intel_cache_attack_types_gin 
-  ON ip_intel_cache USING gin (attack_types);
+## Machine feed tokens
 
--- 2. GIN index for MITRE ATT&CK technique lookups
--- Useful for: WHERE mitre_tactics @> ARRAY['T1190']
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ip_intel_cache_mitre_gin 
-  ON ip_intel_cache USING gin (mitre_tactics);
+`app_feed_tokens`: UUID PK; unique `token_hash` constrained to 64 lowercase hex characters; `scopes text[]` constrained to a subset of `['feed:read']` with that default; non-null `expires_at`; nullable `revoked_at`; creation timestamp. Authentication hashes an exact 43-character base64url bearer token and checks expiry, revocation and the required scope. Empty scopes grant nothing.
 
--- 3. Composite B-tree index for global dashboard sorting
--- Speeds up: ORDER BY total_alert_count DESC, abuse_score DESC
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ip_intel_cache_rank 
-  ON ip_intel_cache (total_alert_count DESC, abuse_score DESC NULLS LAST);
+Only SELECT is granted to the auth group. Issuance/rotation/revocation is a reviewed operator database integration, **not** a shipped token-management UI or account CLI. Never persist the raw bearer secret here or expose it in a query string.
 
--- 4. Composite B-tree index for paginated IP event logs
--- Speeds up: WHERE ip = $1 ORDER BY seen_at DESC LIMIT $2 OFFSET $3
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ip_intel_events_ip_seen 
-  ON ip_intel_events (ip, seen_at DESC);
-```
+## Maintenance records
 
-### EXPLAIN Query Plan Notes:
-- **IP Lookup (`WHERE ip = $1`)**: Hits `ip_intel_cache_pkey` with Index Scan, cost `< 0.28..8.30 ms`.
-- **Top 10 Attackers (`ORDER BY total_alert_count DESC LIMIT 10`)**: On ~500 rows, in-memory QuickSort takes `< 1.2 ms`. With `idx_ip_intel_cache_rank`, switches to direct Index Scan with 0 sort cost.
-- **Event History (`WHERE ip = $1 ORDER BY seen_at DESC`)**: Hits `idx_ip_intel_events_ip` with Bitmap Index Scan.
+| Table | Key fields and invariants |
+| --- | --- |
+| `ip_intel_maintenance_plans` | UUID PK, actor text, immutable JSON snapshot, expiry, bounded state, creation time. Targets limited to 200; trigger blocks edits to identity/snapshot/expiry. |
+| `ip_intel_maintenance_jobs` | UUID PK, unique plan FK, actor, UUID idempotency key, result JSON/status. `(actor_id,idempotency_key)` is unique. |
+| `ip_intel_retention_policies` | UUID PK, actor, UTC cutoff, enabled flag default false, unique optional job FK, creation time. Records an approved **one-run** job, not recurring cleanup. |
+| `ip_intel_maintenance_audit` | UUID PK, actor/action/fingerprint, matched and affected counts each constrained to 0–200, outcome and timestamp. Runtime maintenance has no edit/delete grant. |
+
+Plans expire after ten minutes. Execution rechecks ownership, inbound dependencies, actor and exact current target revisions under locks, with fixed statements/timeouts and an all-or-nothing transaction. Bulk delete (more than one row) additionally requires operator recovery checkpoint assertions. These assertions do not create or independently verify a backup. Queued retention requires explicit worker invocation before expiry; no future matching rows join the snapshot and no scheduler ships by default.
+
+## Indexes and performance
+
+The migrations create primary-key/unique indexes, the session user index, and maintenance idempotency/plan uniqueness. They do **not** promise automatic telemetry tuning or the indexes from an external deployment. No measured query latencies are claimed here.
+
+After measuring a representative **synthetic** workload, a DBA may consider a composite event index `(ip, seen_at DESC, id DESC)` and indexes matching the actual aggregate/roster predicates. Assess write/storage cost and real query plans before applying. `CREATE INDEX CONCURRENTLY` cannot run inside the current transactional migration loop; use a reviewed separate operator procedure or a deliberately designed migration approach. Never create indexes through the read-only web connection or test on an operational database without separate authorization.

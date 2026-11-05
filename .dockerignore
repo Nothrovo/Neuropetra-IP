@@ -2,3 +2,23 @@ node_modules
 .next
 .git
 *.log
+.env*
+*.sql
+*.dump
+*.bak
+*.pem
+.secrets
+.secrets/**
+.runtime/
+.maintenance-pg/
+.backend-pg/
+.auth-race-pg/
+.operator-db-test-*/
+.install-test-*/
+.maintenance-pg-synthetic-output
+coverage
+test-results
+playwright-report
+# Schema SQL is owned source, not operational dumps.
+!migrations/
+!migrations/*.sql

@@ -22,9 +22,9 @@ describe('Charlie Reporter IoC Formatter', () => {
       expect(classifyThreatScore(69)).toBe('Suspicious / Moderate Risk');
     });
 
-    it('classifies 0 as Clean / 0% Abuse Confidence', () => {
-      expect(classifyThreatScore(0)).toBe('Clean / 0% Abuse Confidence');
-      expect(classifyThreatScore('0')).toBe('Clean / 0% Abuse Confidence');
+    it('classifies 0 as 0% Reported Abuse Confidence (not a safety verdict)', () => {
+      expect(classifyThreatScore(0)).toBe('0% Reported Abuse Confidence (not a safety verdict)');
+      expect(classifyThreatScore('0')).toBe('0% Reported Abuse Confidence (not a safety verdict)');
     });
 
     it('classifies 1-19 as Low Reported Abuse Score', () => {
@@ -37,6 +37,14 @@ describe('Charlie Reporter IoC Formatter', () => {
       expect(classifyThreatScore(undefined)).toBe('Not Enriched');
       expect(classifyThreatScore('')).toBe('Not Enriched');
     });
+  });
+
+  it('never attributes a local composite score to a provider', () => {
+    for (const reputationSource of ['abuseipdb', 'virustotal']) {
+      const row = formatSingleIocRow({ ip: '8.8.8.8', found: true, compositeScore: 99, reputationSource });
+      expect(row).toContain('Score: N/A [Not Enriched]');
+      expect(row).not.toContain('99%');
+    }
   });
 
   describe('getFullCountryName', () => {
@@ -73,14 +81,14 @@ describe('Charlie Reporter IoC Formatter', () => {
       );
     });
 
-    it('formats un-enriched external IPs', () => {
+    it('labels documentation ranges as non-global, not RFC1918 private', () => {
       const unenrichedItem: BulkIpItem = {
         ip: '198.51.100.23',
         found: false,
       };
       const row = formatSingleIocRow(unenrichedItem);
       expect(row).toBe(
-        '| IP | 198.51.100.23 | External Network | External Source IP [Reputation Not Enriched] |'
+        '| IP | 198.51.100.23 | Non-global Network | Non-global IP [Special-use address; not a safety verdict] |'
       );
     });
 
@@ -113,7 +121,7 @@ describe('Charlie Reporter IoC Formatter', () => {
       };
       const row = formatSingleIocRow(cleanItem);
       expect(row).toBe(
-        '| IP | 1.1.1.1 | Australia (Cloudflare) | Threat Intel AbuseIPDB Score: 0% [Clean / 0% Abuse Confidence] |'
+        '| IP | 1.1.1.1 | Australia (Cloudflare) | Threat Intel AbuseIPDB Score: 0% [0% Reported Abuse Confidence (not a safety verdict)] |'
       );
       expect(row).not.toContain('requests');
     });

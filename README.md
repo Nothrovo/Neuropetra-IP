@@ -1,128 +1,126 @@
-# IP Intel — ACAD CSIRT Threat Intelligence Platform
+# IP Intel
 
-Internal, AbuseIPDB-style threat-intelligence lookup and attack telemetry web application for the SOC team, built natively on top of PostgreSQL (`abuseip`).
+A standalone IP investigation application built with Next.js, TypeScript and PostgreSQL. Investigate exact IPv4/IPv6 indicators, browse local evidence and provider/ISP rosters, compare reputation with local signals, and export bounded feeds.
 
----
+## What is implemented
 
-## 🚀 Key Features
+- Authenticated local investigation, bulk input, event history, dashboard aggregates and MITRE technique mapping.
+- Separate application-owned reputation storage: enrichment does not manufacture local observations or overwrite telemetry timestamps/counts.
+- Optional **AbuseIPDB** enrichment, disabled by default. Legacy VirusTotal fields can be displayed/scored when supplied by an integration; there is no live VirusTotal client.
+- Persisted users, salted scrypt password hashes, opaque server-side sessions, role checks, revocation and recent reauthentication for maintenance execution.
+- TXT/CSV feeds and IPv4-only Wazuh CDB output. CSV cells are escaped against spreadsheet formula injection; no export format is a substitute for reviewing a blocklist.
+- Optional, narrowly scoped reputation invalidation/deletion with preview, confirmation, immutable snapshots and audit records. Retention is an explicitly approved **one-run job**, not an automatic recurring scheduler.
 
-- **Read-Only Telemetry Exploration**: Integrates directly with `ip_intel_cache` and `ip_intel_events` without modifying existing incident records.
-- **Dynamic Threat Verdict Engine**: Composite score (0–100) combining AbuseIPDB confidence, VirusTotal malicious detection ratios, and local SOC signals (alert volume log-scale, target spread, recency decay, and critical outcome detection).
-- **MITRE ATT&CK® Enterprise Matrix Mapping**: Normalizes observed technique IDs (`T1595.002`, `T1190`, `T1055`, `T1083`, `T1498`) to enterprise tactical objectives.
-- **Granular Incident Timeline & Forensics**: Per-day attack frequency charts (30d/90d) and paginated event table with plain-text log expansion (zero XSS vulnerability).
-- **Bulk IP Investigation**: Batch lookup supporting newline/comma-separated IPs and CSV file uploads with instantaneous CSV export.
-- **Multi-Format Blocklist Feeds**: Generate live dynamic threat feeds formatted for Firewalls (TXT), Spreadsheets (CSV), and Wazuh CDB-lists (`ip:desc`) for `/var/ossec/etc/lists/`.
-- **Zero-Dependency Mock Mode**: Instant local development with `USE_MOCK_DATA=true` without requiring a production database connection.
+A score of zero, missing reputation, and an **Unknown** verdict are not interchangeable. Scoring is a prioritization aid, not a guarantee that an address is safe or malicious. An empty installation contains no operational telemetry; importing an external source requires an explicitly reviewed integration.
 
----
+## Installation
 
-## 🛠️ Stack
+**PostgreSQL is required**, including when mock telemetry is enabled. There are two supported deployment arrangements:
 
-- **Framework**: Next.js 16 (App Router) + TypeScript
-- **Styling**: Tailwind CSS (SOC Dark Theme: `slate-950`, `cyan-400`, `red-500`, `amber-400`, `emerald-400`)
-- **State & Data Fetching**: TanStack React Query
-- **Charts**: Recharts
-- **Database Client**: `pg` with connection pooling and strictly parameterized `SELECT` queries
-- **Testing**: Vitest unit test suite
+1. **Bundled PostgreSQL with Docker Compose** — private database network and persistent volume.
+2. **A dedicated application database on your existing PostgreSQL server** — separately provisioned application roles, never a shared SOC/incident database.
 
----
+The root `docker-compose.yml` contains only the app. `compose.postgres.yml` adds the database and explicit provision/migration jobs; `compose.operator.yml` adds the bootstrap-token operator. Database provisioning and migrations never run automatically in the web process.
 
-## 🔒 Security Best Practices & Read-Only Role
+### Bundled quick start
 
-The application connects to PostgreSQL using a strictly read-only role. To create the read-only user in PostgreSQL:
-
-```sql
--- 1. Create a dedicated read-only role
-CREATE ROLE soc_readonly WITH LOGIN PASSWORD 'YourSecurePasswordHere';
-
--- 2. Grant connection and schema usage
-GRANT CONNECT ON DATABASE abuseip TO soc_readonly;
-\c abuseip
-GRANT USAGE ON SCHEMA public TO soc_readonly;
-
--- 3. Grant SELECT privileges only on the two tables
-GRANT SELECT ON ip_intel_cache TO soc_readonly;
-GRANT SELECT ON ip_intel_events TO soc_readonly;
-
--- 4. Set transaction defaults to read-only
-ALTER ROLE soc_readonly SET default_transaction_read_only = on;
-```
-
----
-
-## ⚙️ Environment Variables
-
-Copy `.env.example` to `.env.local`:
+Prerequisites: Node.js 22, pnpm matching `package.json`, Docker Engine and Docker Compose v2. Run from this checkout. Keep the loopback binding until HTTPS termination is configured.
 
 ```bash
-cp .env.example .env.local
+pnpm install --frozen-lockfile
+pnpm install:secrets
+install -d -m 700 .runtime/owner
+export APP_ORIGIN=http://127.0.0.1:3000
+
+docker compose --env-file .runtime/secrets/compose.env \
+  -f docker-compose.yml -f compose.postgres.yml -f compose.operator.yml \
+  up -d postgres
+
+docker compose --env-file .runtime/secrets/compose.env \
+  -f docker-compose.yml -f compose.postgres.yml -f compose.operator.yml \
+  run --rm --build provision
+
+docker compose --env-file .runtime/secrets/compose.env \
+  -f docker-compose.yml -f compose.postgres.yml -f compose.operator.yml \
+  run --rm --build migrate
+
+docker compose --env-file .runtime/secrets/compose.env \
+  -f docker-compose.yml -f compose.postgres.yml -f compose.operator.yml \
+  run --rm --build account
+
+docker compose --env-file .runtime/secrets/compose.env \
+  -f docker-compose.yml -f compose.postgres.yml -f compose.operator.yml \
+  up -d --build app
 ```
 
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | `postgresql://soc_readonly:REDACTED_PASSWORD@127.0.0.1:5432/abuseip` | Connection string to the PostgreSQL database. |
-| `USE_MOCK_DATA` | `false` | When `true`, uses synthetic in-memory telemetry without connecting to DB. |
-| `PORT` | `3001` | Host port for Docker Compose and local web server. |
-| `AUTH_USER` | `analyst` | Default SOC analyst username. |
-| `AUTH_PASS` | `soc123` | Default SOC analyst password. |
-| `ENABLE_RECHECK`| `false` | Feature flag for the sidecar re-check button. Kept false to protect audit logs. |
+The installer generates distinct restricted secret files and refuses to overwrite them. Provisioning is for a **fresh dedicated database**; it refuses existing application login roles instead of silently rotating passwords.
 
----
+Open `http://127.0.0.1:3000/setup`. Read `.runtime/owner/bootstrap-token` privately on the host and enter it in the setup form with **your chosen owner username and password**. The token expires after 30 minutes, is single-use, and is stored hashed in PostgreSQL. Do not print it in terminal recordings, put it in a URL, or send it to application logs. Setup creates an administrator; it is not a public registration route. There are no demo accounts or fallback credentials. Remove the consumed local token file securely according to host policy, then log in at `/login`.
 
-## 🚀 Running the Application
+For existing PostgreSQL, password recovery, upgrades, backups and production TLS, follow [OPERATIONS.md](docs/OPERATIONS.md). For removal, use the [non-destructive uninstall and data-retention runbook](docs/OPERATIONS.md#uninstall-and-data-retention); database data and recovery credentials are retained by default. The schema and exact privilege split are documented in [DB_SCHEMA.md](docs/DB_SCHEMA.md).
 
-### Option A: Local Development
+## Architecture and access
+
+```text
+Browser -> trusted HTTPS proxy (production) -> Next.js UI / authorized API
+                                            |-> auth scope: setup, users, sessions, feed-token checks
+                                            |-> read scope: telemetry + merged owned reputation
+                                            |-> reputation scope: optional AbuseIPDB writes
+                                            `-> optional maintenance scope: approved reputation jobs
+
+Route A: scoped connections -> private Compose PostgreSQL -> persistent pgdata
+Route B: scoped connections -> dedicated database on separately managed PostgreSQL
+Operator only: provision -> explicit checksummed migrations -> private bootstrap file
+```
+
+The two routes use the same schema and privilege split; Route B changes database hosting, not ownership boundaries. Source collection, backup/restore, HTTPS ingress and optional provider credentials remain operator integrations. Reputation-only indicators do not invent observation timestamps or local alerts.
+
+The shipped **analyst** role has investigation/read permission only. The **administrator** can additionally enrich, export and manage the owned database scope; maintenance execution/cancellation requires recent reauthentication as well as the optional maintenance configuration. Setup creates the first administrator, not a default analyst. Additional account provisioning is a reviewed operator integration, not a shipped user-management UI. A machine feed token grants only its exact feed GET route, not an interactive administrator session.
+
+## Configuration
+
+[`.env.example`](.env.example) lists names, not production credentials. Secret values may use a direct variable **or** its `_FILE` variant, never both. Compose mounts protected files; copying container paths from `.env.example` into a host environment does not create those files.
+
+| Setting | Meaning |
+| --- | --- |
+| `APP_ORIGIN` | Required canonical browser origin, no path/trailing slash. HTTPS except for loopback HTTP. Do not derive it from request Host/forwarded headers. |
+| `AUTH_DATABASE_URL[_FILE]` | Users, installation state, sessions and authentication throttling. |
+| `READ_DATABASE_URL[_FILE]` | Telemetry/reputation reads and permitted maintenance metadata reads. |
+| `REPUTATION_DATABASE_URL[_FILE]` | Owned reputation writer; no telemetry writes. |
+| `MAINTENANCE_DATABASE_URL[_FILE]` | Optional privileged maintenance scope; absent by default. |
+| `ENABLE_EXTERNAL_ENRICHMENT` | `false` by default. Requires `true`, a provider key, reputation writer and non-mock mode to enable. |
+| `ABUSEIPDB_API_KEY[_FILE]` | Optional server-side provider credential; never commit it. |
+| `USE_MOCK_DATA` | Synthetic telemetry for development/tests, **not** an authentication or PostgreSQL bypass. |
+| `APP_PORT` | Compose host port, default `3000`; update `APP_ORIGIN` to match. |
+
+There is no generic `DATABASE_URL`, default localhost database connection, `AUTH_USER`/`AUTH_PASS` login, or automatically provisioned analyst.
+
+## Development and verification
+
+Provision/migrate a disposable dedicated database first, configure the scoped connections and `APP_ORIGIN`, and bootstrap an owner as above. For host development, use host-readable secret paths as described in the operations guide.
 
 ```bash
-# 1. Install dependencies
-pnpm install
+pnpm dev --hostname 127.0.0.1 --port 3000
+```
 
-# 2. Run unit tests
+Default checks do not opt in to database-writing integration fixtures:
+
+```bash
+node_modules/.bin/tsx scripts/check-release-boundary.ts
+pnpm lint
+pnpm typecheck
 pnpm test
-
-# 3. Start development server
-pnpm dev -p 3001
+pnpm build
 ```
 
-Access the web interface at **`http://localhost:3001`** (Login: `analyst` / `soc123`).
+Do **not** set `RUN_DATABASE_TESTS=1` on a production/operator shell. The isolated real-HTTP/provisioning fixture and its destructive scope are documented in [operations: verification](docs/OPERATIONS.md#verification). Test totals belong in execution reports, not a static README. CI runs frozen dependency installation, release-source/build-context boundary checks, lint, type checking, default tests, Next.js build and the runtime Docker image build; real database tests are an explicit manual opt-in job.
 
-### Option B: Docker Compose
+## Exports and automation
 
-```bash
-# Build and run the web container
-docker compose up -d --build
+Use an explicit bound, for example `/api/blocklist?format=txt&max_rows=1000`. Requests exceeding their selected cap fail rather than silently claiming completeness. CDB rejects IPv6; select TXT or CSV instead. Provider roster exports also have explicit bounds.
 
-# Inspect logs
-docker compose logs -f ip-intel-web
-```
+Interactive export uses a verified session. Machine feed access uses a bearer token whose SHA-256 hash, `feed:read` scope, expiry and optional revocation are persisted in `app_feed_tokens`. **Token issuance/rotation/revocation is currently an operator database integration, not a shipped management UI or account CLI command.** Never put a feed token in a URL. These tokens authorize only the exact feed GET route, not general application APIs.
 
----
+## Publishing and security
 
-## 🧪 Testing & Mock Mode
-
-### Running Automated Unit Tests
-```bash
-pnpm test
-```
-Runs 14 unit tests covering:
-- Threat verdict score calculations, missing-source re-normalizations, and critical outcome bonuses.
-- IPv4, IPv6, and CIDR validations.
-- Safe defanging utility (`198.51.100[.]23`, `hxxps://`).
-- MITRE ATT&CK technique normalization and tactical matrix grouping.
-
-### Using Mock Mode
-To test all UI features without PostgreSQL:
-```bash
-USE_MOCK_DATA=true pnpm dev -p 3001
-```
-
-To seed an empty development PostgreSQL instance with synthetic data:
-```bash
-npx tsx scripts/seed-mock.ts
-```
-
----
-
-## 📚 Technical Documentation
-
-- **Database Schema & Index Tuning**: Refer to [`docs/DB_SCHEMA.md`](docs/DB_SCHEMA.md) for table schemas, data type mappings, and index recommendations (`CREATE INDEX CONCURRENTLY ... USING gin`).
+See [SECURITY.md](SECURITY.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Keep runtime secrets, private operator output, dumps and local fixture state out of Git and build contexts. Before publishing, the owner must choose the distribution license and review repository history; no license is selected here. Any credential previously exposed in an old checkout or history must be rotated independently—deleting a line does not revoke it. This documentation does not claim a deployment security audit or absence of XSS. No deployment or publication is performed by these instructions.

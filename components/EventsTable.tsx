@@ -13,6 +13,8 @@ export default function EventsTable({
   onPageChange,
   onFilterChange,
   availableHosts = [],
+  error,
+  loading=false,
 }: {
   events: IpIntelEventRow[];
   total: number;
@@ -21,6 +23,8 @@ export default function EventsTable({
   onPageChange: (newPage: number) => void;
   onFilterChange: (filters: { alertType?: string; outcome?: string; targetHost?: string }) => void;
   availableHosts?: string[];
+  error?:string;
+  loading?:boolean;
 }) {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [selectedType, setSelectedType] = useState<string>('');
@@ -33,6 +37,8 @@ export default function EventsTable({
     setSelectedType(type);
     setSelectedHost(host);
     setSelectedOutcome(outcome);
+    onPageChange(1);
+    setExpandedRow(null);
     onFilterChange({
       alertType: type || undefined,
       targetHost: host || undefined,
@@ -133,7 +139,7 @@ export default function EventsTable({
       </div>
 
       {/* Events Table */}
-      {events.length === 0 ? (
+      {error ? <p role="alert" className="text-red-400">{error}</p> : loading ? <p role="status">Loading evidence…</p> : events.length === 0 ? (
         <div className="py-12 text-center text-xs text-zinc-500 font-sans">
           No alert events found matching the active criteria.
         </div>
@@ -142,7 +148,7 @@ export default function EventsTable({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-white/[0.08] text-[11px] font-medium text-zinc-400 font-sans">
-                <th className="pb-2 pl-2">Time (WIB/UTC)</th>
+                <th className="pb-2 pl-2">Time (UTC)</th>
                 <th className="pb-2">Classification</th>
                 <th className="pb-2">MITRE</th>
                 <th className="pb-2">Target Host</th>
@@ -164,6 +170,7 @@ export default function EventsTable({
                     >
                       <td className="py-2.5 pl-2 text-zinc-300 whitespace-nowrap text-[11px] font-tabular">
                         {new Date(ev.seen_at).toLocaleString('id-ID', {
+                          timeZone: 'UTC',
                           month: 'short',
                           day: 'numeric',
                           hour: '2-digit',
@@ -204,6 +211,8 @@ export default function EventsTable({
                       <td className="py-2.5">{getOutcomeBadge(ev.outcome)}</td>
                       <td className="py-2.5 pr-2 text-right">
                         <button
+                          aria-label={`Toggle evidence for event ${ev.id}`}
+                          aria-expanded={isExpanded}
                           onClick={(e) => {
                             e.stopPropagation();
                             setExpandedRow(isExpanded ? null : ev.id);

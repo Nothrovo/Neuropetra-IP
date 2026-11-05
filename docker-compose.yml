@@ -1,41 +1,40 @@
 services:
-  # 1. IP Intel Web Application
-  ip-intel-web:
+  app:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: ip-intel-web
+      target: runner
     restart: unless-stopped
-    network_mode: host
-    environment:
-      NODE_ENV: production
-      PORT: 3001
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres@127.0.0.1:5432/abuseip}
-      USE_MOCK_DATA: ${USE_MOCK_DATA:-false}
-      AUTH_USER: ${AUTH_USER:-analyst}
-      AUTH_PASS: ${AUTH_PASS:-soc123}
-      ENABLE_RECHECK: ${ENABLE_RECHECK:-false}
-
-  # 2. Optional Isolated Postgres Service for standalone dev / CI
-  postgres-dev:
-    image: postgres:16-alpine
-    container_name: ip-intel-postgres-dev
-    profiles: ["dev-db"]
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: abuseip
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: PasswordKuat123
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     ports:
-      - "5433:5432"
-    volumes:
-      - ip_intel_pgdata:/var/lib/postgresql/data
-      - ../Alpha_Reporter/schema_abuseip.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:3000}
+      AUTH_DATABASE_URL_FILE: /run/secrets/auth_database_url
+      READ_DATABASE_URL_FILE: /run/secrets/read_database_url
+      REPUTATION_DATABASE_URL_FILE: /run/secrets/reputation_database_url
+      # Maintenance remains disabled until explicitly configured by the operator.
+      ENABLE_EXTERNAL_ENRICHMENT: ${ENABLE_EXTERNAL_ENRICHMENT:-false}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+    secrets:
+      - auth_database_url
+      - read_database_url
+      - reputation_database_url
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d abuseip"]
-      interval: 5s
-      timeout: 5s
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 6s
       retries: 5
-
-volumes:
-  ip_intel_pgdata:
+secrets:
+  auth_database_url:
+    file: ${IP_INTEL_SECRET_DIR:-.runtime/secrets}/auth-database-url
+  read_database_url:
+    file: ${IP_INTEL_SECRET_DIR:-.runtime/secrets}/read-database-url
+  reputation_database_url:
+    file: ${IP_INTEL_SECRET_DIR:-.runtime/secrets}/reputation-database-url

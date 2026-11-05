@@ -7,7 +7,6 @@ import {
   Building2,
   ArrowLeft,
   ShieldAlert,
-  Globe2,
   Activity,
   FileDown,
   Copy,
@@ -16,12 +15,14 @@ import {
   Search,
   Server,
   Layers,
-  Calendar,
   AlertTriangle,
   ArrowUpDown,
-  Filter,
 } from 'lucide-react';
 import DefangButton from '@/components/DefangButton';
+import type { IntelRow, ProviderSummary } from '@/lib/db';
+type ProviderPageResponse = { provider: ProviderSummary; ips: IntelRow[]; total: number; limit: number; offset: number; hasMore: boolean; attackTypes: {type: string; count: number}[]; targetHosts: {host: string; count: number}[] };
+const EMPTY_IPS: IntelRow[] = [];
+function observationDate(value: string | null): string { return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleDateString('id-ID') : 'Unknown'; }
 
 type SortOption = 'score_desc' | 'score_asc' | 'alerts_desc' | 'ip_asc' | 'last_seen_desc';
 
@@ -37,14 +38,16 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
   const params = use(props.params);
   const providerName = decodeURIComponent(params.name || '');
 
+  const [offset, setOffset] = useState(0);
+  const limit = 100;
   const [copied, setCopied] = useState(false);
   const [ipFilter, setIpFilter] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('score_desc');
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['provider-detail', providerName],
+  const { data, isLoading, isError } = useQuery<ProviderPageResponse>({
+    queryKey: ['provider-detail', providerName, limit, offset],
     queryFn: async () => {
-      const res = await fetch(`/api/providers/${encodeURIComponent(providerName)}`);
+      const res = await fetch(`/api/providers/${encodeURIComponent(providerName)}?limit=${limit}&offset=${offset}`);
       if (!res.ok) throw new Error('Failed to load provider details');
       return res.json();
     },
@@ -53,11 +56,11 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
   const provider = data?.provider;
   const attackTypes = data?.attackTypes || [];
   const targetHosts = data?.targetHosts || [];
-  const rawIps = data?.ips || [];
+  const rawIps = data?.ips ?? EMPTY_IPS;
 
   // Filter and sort IPs
   const processedIps = useMemo(() => {
-    let list = rawIps.filter((item: any) => {
+    const list = rawIps.filter((item) => {
       if (!ipFilter) return true;
       const term = ipFilter.toLowerCase();
       return (
@@ -66,27 +69,27 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
       );
     });
 
-    return list.sort((a: any, b: any) => {
+    return list.sort((a, b) => {
       switch (sortBy) {
         case 'score_desc':
           return (b.abuse_score ?? 0) - (a.abuse_score ?? 0);
         case 'score_asc':
           return (a.abuse_score ?? 0) - (b.abuse_score ?? 0);
         case 'alerts_desc':
-          return (b.total_alert_count || 1) - (a.total_alert_count || 1);
+          return (b.total_alert_count ?? 0) - (a.total_alert_count ?? 0);
         case 'ip_asc':
           return ipToNumber(a.ip) - ipToNumber(b.ip);
         case 'last_seen_desc':
-          return new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime();
+          return (b.last_seen ? Date.parse(b.last_seen) : -Infinity) - (a.last_seen ? Date.parse(a.last_seen) : -Infinity);
         default:
           return 0;
       }
     });
   }, [rawIps, ipFilter, sortBy]);
 
-  async function handleCopyAllIps() {
-    if (!rawIps.length) return;
-    const text = rawIps.map((i: any) => i.ip).join('\n');
+  async function handleCopyPageIps() {
+    if (!processedIps.length) return;
+    const text = processedIps.map(i => i.ip).join('\n');
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -97,7 +100,8 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
   }
 
   function getScoreBadge(score: number | null) {
-    const val = score ?? 0;
+    if (score === null) return <span className="text-zinc-500">N/A</span>;
+    const val = score;
     if (val >= 75) {
       return (
         <span className="rounded bg-red-950/40 px-2 py-0.5 text-xs font-mono font-bold text-red-400 border border-red-800/60 font-tabular">
@@ -139,9 +143,9 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
         </Link>
         <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-8 text-center text-red-400 space-y-3">
           <AlertTriangle className="h-8 w-8 mx-auto text-red-400" />
-          <h2 className="text-base font-bold">Provider Not Found</h2>
+          <h2 className="text-base font-bold">{isError ? 'Failed to load provider details' : 'Provider Not Found'}</h2>
           <p className="text-xs text-zinc-400 max-w-md mx-auto">
-            No indicators currently mapped to network provider &quot;{providerName}&quot;.
+            {isError ? 'The request failed. Please retry; this is not evidence of an empty provider roster.' : `No indicators currently mapped to network provider "${providerName}".`}
           </p>
         </div>
       </div>
@@ -160,7 +164,7 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
           <span>Back to Provider Directory</span>
         </Link>
         <span className="text-xs font-mono text-zinc-500">
-          Last Active: {new Date(provider.last_seen).toLocaleDateString('id-ID')}
+          Last Active: {observationDate(provider.last_seen)}
         </span>
       </div>
 
@@ -204,12 +208,13 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
           {/* Quick Actions Bar */}
           <div className="flex flex-wrap items-center gap-2 font-mono">
             <button
-              onClick={handleCopyAllIps}
+              onClick={handleCopyPageIps}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#141824] px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.06] transition"
-              title="Copy all IPs for firewall rule creation"
+              title="Copy visible IPs on this page only"
+              disabled={!processedIps.length}
             >
               {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-zinc-400" />}
-              <span>{copied ? 'Copied' : `Copy All (${rawIps.length})`}</span>
+              <span>{copied ? 'Copied' : `Copy page (${processedIps.length})`}</span>
             </button>
 
             {/* Blocklist Export Downloads */}
@@ -243,7 +248,7 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
         {/* Aggregate KPI Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-white/[0.06] font-mono">
           <div className="rounded-lg bg-[#141824] p-3 space-y-0.5 border border-white/[0.04]">
-            <span className="text-[10px] uppercase font-sans text-zinc-400 block">Observed IPs</span>
+            <span className="text-[10px] uppercase font-sans text-zinc-400 block">Attributed IPs (all time)</span>
             <p className="text-xl font-bold text-zinc-100 font-tabular">{provider.ip_count}</p>
           </div>
 
@@ -254,12 +259,12 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
 
           <div className="rounded-lg bg-[#141824] p-3 space-y-0.5 border border-white/[0.04]">
             <span className="text-[10px] uppercase font-sans text-zinc-400 block">Avg Abuse Confidence</span>
-            <p className="text-xl font-bold text-amber-400 font-tabular">{provider.avg_abuse_score}%</p>
+            <p className="text-xl font-bold text-amber-400 font-tabular">{provider.avg_abuse_score == null ? 'N/A' : `${provider.avg_abuse_score}%`}</p>
           </div>
 
           <div className="rounded-lg bg-[#141824] p-3 space-y-0.5 border border-white/[0.04]">
             <span className="text-[10px] uppercase font-sans text-zinc-400 block">Peak Threat Score</span>
-            <p className="text-xl font-bold text-red-400 font-tabular">{provider.max_abuse_score}%</p>
+            <p className="text-xl font-bold text-red-400 font-tabular">{provider.max_abuse_score == null ? 'N/A' : `${provider.max_abuse_score}%`}</p>
           </div>
         </div>
       </div>
@@ -280,7 +285,7 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
             <p className="text-xs text-zinc-500 font-mono py-4">No specific exploit categories identified yet.</p>
           ) : (
             <div className="space-y-2.5">
-              {attackTypes.map((item: any) => {
+              {attackTypes.map((item) => {
                 const max = attackTypes[0]?.count || 1;
                 const pct = Math.round((item.count / max) * 100);
                 return (
@@ -316,7 +321,7 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
             <p className="text-xs text-zinc-500 font-mono py-4">No internal host telemetry recorded.</p>
           ) : (
             <div className="space-y-2 font-mono">
-              {targetHosts.map((h: any) => (
+              {targetHosts.map((h) => (
                 <div
                   key={h.host}
                   className="flex items-center justify-between rounded-lg bg-[#141824] p-2.5 text-xs border border-white/[0.06]"
@@ -338,11 +343,11 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
               <Layers className="h-4 w-4 text-zinc-400" />
               <span>Attributed Threat Indicators</span>
               <span className="rounded bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-zinc-300 border border-white/[0.08]">
-                {processedIps.length} of {rawIps.length} IPs
+                {processedIps.length} visible on page; {data?.total ?? 0} IPs total
               </span>
             </h3>
             <p className="text-[11px] text-zinc-400">
-              IP addresses actively monitored in PostgreSQL belonging to {provider.isp}
+              All-time attribution for {provider.isp}. Filtering, sorting and copying affect this page only.
             </p>
           </div>
 
@@ -351,7 +356,7 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
             {/* Sort Selector */}
             <div className="flex items-center gap-1.5 text-xs font-mono">
               <span className="text-zinc-500 font-sans flex items-center gap-1 text-[11px]">
-                <ArrowUpDown className="h-3 w-3" /> Sort:
+                <ArrowUpDown className="h-3 w-3" /> Sort page:
               </span>
               <select
                 value={sortBy}
@@ -373,7 +378,8 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
                 type="text"
                 value={ipFilter}
                 onChange={(e) => setIpFilter(e.target.value)}
-                placeholder="Filter IP or attack type..."
+                placeholder="Filter this page: IP or attack type..."
+                aria-label="Filter this page"
                 className="w-full rounded-md border border-white/[0.08] bg-[#141824] py-1 pl-8 pr-3 font-mono text-xs text-zinc-200 placeholder-zinc-500 focus:border-white/[0.25] focus:outline-none"
               />
             </div>
@@ -402,7 +408,7 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
                   </td>
                 </tr>
               ) : (
-                processedIps.map((row: any) => (
+                processedIps.map((row) => (
                   <tr key={row.ip} className="hover:bg-white/[0.03] transition">
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
@@ -423,14 +429,14 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
                             row.vt_malicious >= 5 ? 'text-red-400' : 'text-zinc-400'
                           }`}
                         >
-                          {row.vt_malicious} / 70
+                          {row.vt_malicious} detections
                         </span>
                       ) : (
                         <span className="text-zinc-600">N/A</span>
                       )}
                     </td>
                     <td className="py-3 px-3 font-medium text-zinc-200 font-tabular">
-                      {row.total_alert_count || 1}
+                      {row.total_alert_count ?? 0}
                     </td>
                     <td className="py-3 px-3">
                       <div className="flex flex-wrap gap-1 max-w-xs">
@@ -445,7 +451,7 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
                       </div>
                     </td>
                     <td className="py-3 px-3 text-zinc-400 text-[11px] font-tabular">
-                      {new Date(row.last_seen).toLocaleDateString('id-ID')}
+                      {observationDate(row.last_seen)}
                     </td>
                     <td className="py-3 px-3 text-right">
                       <Link
@@ -462,6 +468,11 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
             </tbody>
           </table>
         </div>
+        <nav aria-label="Provider roster pagination" className="flex items-center gap-3 text-xs">
+          <button disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - limit)); setCopied(false); }}>Previous page</button>
+          <span>Page {Math.floor(offset / limit) + 1} — {data?.total ?? 0} IPs total</span>
+          <button disabled={!data?.hasMore} onClick={() => { setOffset(offset + limit); setCopied(false); }}>Next page</button>
+        </nav>
       </div>
     </div>
   );

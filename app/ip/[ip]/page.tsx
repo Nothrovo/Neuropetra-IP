@@ -1,28 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
+import type { IntelRow } from '@/lib/db';
+import type { IpIntelEventRow } from '@/lib/mock-data';
+import type { ScoreBreakdown } from '@/lib/scoring';
+import type { IpSummary,TelemetryScope } from '@/lib/telemetry-aggregates';
+interface DetailResponse {found:boolean;intel:IntelRow;scoring:ScoreBreakdown;hasCriticalOutcome:boolean;relatedIps:IntelRow[];cacheFreshness:{ageDays:string;ttlDaysLeft:string}|null}
+interface SummaryResponse extends IpSummary {scope:TelemetryScope}
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import {
-  ShieldAlert,
-  Clock,
-  Globe2,
-  Server,
-  Layers,
-  Calendar,
-  AlertTriangle,
-  RefreshCw,
-  ExternalLink,
-  ChevronLeft,
-  ArrowRight,
-  HelpCircle,
-  Hash,
-  Shield,
-  Activity,
-  Copy,
-  Check,
-} from 'lucide-react';
+import { Layers,RefreshCw,ChevronLeft,HelpCircle,Copy,Check } from 'lucide-react';
 import ScoreGauge from '@/components/ScoreGauge';
 import DefangButton from '@/components/DefangButton';
 import MitreHeatmap from '@/components/MitreHeatmap';
@@ -32,22 +20,25 @@ import OutcomePanel from '@/components/OutcomePanel';
 
 export default function IpDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const rawIp = decodeURIComponent((params.ip as string) || '').trim();
 
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<{ alertType?: string; outcome?: string; targetHost?: string }>({});
   const [copiedIp, setCopiedIp] = useState(false);
+  const [range,setRange]=useState(()=>({days:30,to:new Date().toISOString()}));
+  const scopeParams=new URLSearchParams({from:new Date(Date.parse(range.to)-range.days*86400000).toISOString(),to:range.to,...(filters.alertType?{alert_type:filters.alertType}:{}),...(filters.outcome?{outcome:filters.outcome}:{}),...(filters.targetHost?{target_host:filters.targetHost}:{})}).toString();
+  const {data:summaryData,error:summaryError,isLoading:isLoadingSummary}=useQuery<SummaryResponse>({queryKey:['ip-summary',rawIp,scopeParams],queryFn:async()=>{const response=await fetch(`/api/ip/${encodeURIComponent(rawIp)}/summary?${scopeParams}`);if(!response.ok)throw new Error('Failed to retrieve scoped aggregates');return response.json();}});
+
 
   // 1. Fetch IP Intel Summary
   const {
     data: intelData,
     isLoading: isLoadingIntel,
     error: intelError,
-  } = useQuery({
-    queryKey: ['ip-intel', rawIp],
+  } = useQuery<DetailResponse>({
+    queryKey: ['ip-intel', rawIp,scopeParams],
     queryFn: async () => {
-      const res = await fetch(`/api/ip/${encodeURIComponent(rawIp)}`);
+      const res = await fetch(`/api/ip/${encodeURIComponent(rawIp)}?${scopeParams}`);
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to fetch intel');
@@ -57,8 +48,8 @@ export default function IpDetailPage() {
   });
 
   // 2. Fetch IP Events (paginated & filterable)
-  const { data: eventsData, isLoading: isLoadingEvents } = useQuery({
-    queryKey: ['ip-events', rawIp, page, filters],
+  const { data: eventsData, isLoading: isLoadingEvents,error:eventsError } = useQuery<{events:IpIntelEventRow[];total:number}>({
+    queryKey: ['ip-events', rawIp, page, scopeParams],
     queryFn: async () => {
       const queryParams = new URLSearchParams({
         limit: '15',
@@ -67,7 +58,7 @@ export default function IpDetailPage() {
         ...(filters.outcome ? { outcome: filters.outcome } : {}),
         ...(filters.targetHost ? { target_host: filters.targetHost } : {}),
       });
-      const res = await fetch(`/api/ip/${encodeURIComponent(rawIp)}/events?${queryParams}`);
+      const res = await fetch(`/api/ip/${encodeURIComponent(rawIp)}/events?${queryParams}&${scopeParams}`);
       if (!res.ok) throw new Error('Failed to load events');
       return res.json();
     },
@@ -88,7 +79,8 @@ export default function IpDetailPage() {
     );
   }
 
-  if (intelError || !intelData?.found) {
+  if (intelError) return <div role="alert" className="p-8 text-red-400">Unable to load intelligence: {intelError.message}. This is not an empty telemetry result.</div>;
+  if (!intelData?.found) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-20 text-center space-y-5 font-sans">
         <div className="inline-flex p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-zinc-400">
@@ -111,7 +103,7 @@ export default function IpDetailPage() {
             <span>Return to Search</span>
           </Link>
           <Link
-            href={`/enrich?ip=${encodeURIComponent(rawIp)}`}
+            href={`/investigate?mode=external&ip=${encodeURIComponent(rawIp)}`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.08] px-4 py-2 text-xs font-medium text-white hover:bg-white/[0.14] transition"
           >
             <span>Live Enrich Externally →</span>
@@ -128,16 +120,8 @@ export default function IpDetailPage() {
   const events = eventsData?.events || [];
   const totalEvents = eventsData?.total || 0;
 
-  // Derive outcome counts
-  const outcomeCounts: Record<string, number> = {};
-  for (const ev of events) {
-    const k = ev.outcome || 'unspecified';
-    outcomeCounts[k] = (outcomeCounts[k] || 0) + 1;
-  }
-  const outcomeList = Object.entries(outcomeCounts).map(([outcome, count]) => ({ outcome, count }));
-
-  // Last observed event
-  const lastEvent = events[0];
+  const outcomeList=summaryData?.outcomes??[];
+  const lastEvent=summaryData?.latestEvent;
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -165,7 +149,8 @@ export default function IpDetailPage() {
       </div>
 
       {/* Critical Banner (If breach / allowed outcomes detected) */}
-      <OutcomePanel outcomes={outcomeList} hasCritical={intelData.hasCriticalOutcome} />
+      {summaryError ? <p role="alert">{summaryError.message}</p> : isLoadingSummary ? <p role="status">Loading scoped aggregates…</p> : <OutcomePanel outcomes={outcomeList} hasCritical={summaryData?.hasCriticalOutcome??false} />}
+      <p className="text-xs text-zinc-400">Selected UTC half-open interval: {new Date(Date.parse(range.to)-range.days*86400000).toISOString()} ≤ event time &lt; {range.to}. Summary and score cover all matching events, not the displayed page. Identity metadata below is all-time.</p>
 
       {/* Triage Command Header: IP Identity + The 3 Core Triage Anchors */}
       <div className="rounded-xl border border-white/[0.08] bg-[#0e111a] p-5 space-y-5 shadow-lg">
@@ -217,21 +202,21 @@ export default function IpDetailPage() {
             <div>
               <span className="text-[10px] uppercase font-sans text-zinc-500 block">First Seen</span>
               <span className="text-zinc-200">
-                {new Date(intel.first_seen).toLocaleDateString('id-ID', {
+                {intel.first_seen ? new Date(intel.first_seen).toLocaleDateString('id-ID', {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
-                })}
+                }) : 'Not observed'}
               </span>
             </div>
             <div className="border-l border-white/[0.08] pl-4">
               <span className="text-[10px] uppercase font-sans text-zinc-500 block">Last Seen</span>
               <span className="text-zinc-200">
-                {new Date(intel.last_seen).toLocaleDateString('id-ID', {
+                {intel.last_seen ? new Date(intel.last_seen).toLocaleDateString('id-ID', {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
-                })}
+                }) : 'Not observed'}
               </span>
             </div>
           </div>
@@ -258,12 +243,12 @@ export default function IpDetailPage() {
               </span>
             </div>
             <p className="text-xs text-zinc-300 font-sans">
-              {intel.reputation_json?.totalReports
+              {typeof intel.reputation_json?.totalReports==='number'
                 ? `${intel.reputation_json.totalReports} global abuse reports across ${intel.reputation_json.numDistinctUsers || 'multiple'} contributors.`
                 : 'AbuseIPDB reputation telemetry recorded in PostgreSQL.'}
             </p>
             <div className="text-[10px] text-zinc-500 font-mono">
-              VirusTotal: {intel.vt_malicious ? `${intel.vt_malicious} vendors malicious` : '0 malicious flags'}
+              VirusTotal: {intel.vt_malicious !== null ? `${intel.vt_malicious} vendors malicious` : 'Not evaluated'}
             </div>
           </div>
 
@@ -284,7 +269,7 @@ export default function IpDetailPage() {
                   <span className="text-zinc-600">&bull;</span>
                   <span className="text-zinc-400 truncate">{lastEvent.attack_subtype || 'general'}</span>
                 </div>
-                <p className="text-[11px] text-zinc-400 font-mono truncate" title={lastEvent.raw_summary}>
+                <p className="text-[11px] text-zinc-400 font-mono truncate" title={lastEvent.raw_summary??undefined}>
                   {lastEvent.raw_summary || lastEvent.endpoint || 'Security rule triggered'}
                 </p>
               </div>
@@ -292,7 +277,7 @@ export default function IpDetailPage() {
               <p className="text-xs text-zinc-500 font-sans">No recent event log entries attached.</p>
             )}
             <div className="text-[10px] text-zinc-500 font-mono">
-              Total Recorded Alerts: <span className="text-zinc-300 font-semibold">{intel.total_alert_count || 1}</span>
+              Total Recorded Alerts: <span className="text-zinc-300 font-semibold">{intel.total_alert_count ?? 0}</span>
             </div>
           </div>
 
@@ -333,7 +318,7 @@ export default function IpDetailPage() {
       </div>
 
       {/* Chronological Incident Timeline */}
-      <AttackTimeline events={events} />
+      {!summaryError && !isLoadingSummary && <AttackTimeline timeline={summaryData?.timeline??[]} rangeDays={range.days} onRangeChange={days=>{setRange({days,to:new Date().toISOString()});setPage(1);}} />}
 
       {/* MITRE ATT&CK Matrix Alignment (Ordered by Enterprise Kill Chain) */}
       <MitreHeatmap techniques={intel.mitre_tactics || []} />
@@ -345,7 +330,9 @@ export default function IpDetailPage() {
         page={page}
         limit={15}
         onPageChange={setPage}
-        onFilterChange={setFilters}
+        onFilterChange={value=>{setFilters(value);setPage(1);}}
+        error={eventsError?.message}
+        loading={isLoadingEvents}
         availableHosts={intel.target_hosts || []}
       />
 
@@ -373,7 +360,7 @@ export default function IpDetailPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {relatedIps.map((rel: any) => {
+            {relatedIps.map((rel: IntelRow) => {
               const relScore = rel.abuse_score ?? 0;
               const isRelHigh = relScore >= 75;
               return (
