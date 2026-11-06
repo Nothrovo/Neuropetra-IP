@@ -118,10 +118,28 @@ function exportValue(value: unknown): string {
 function markdownValue(value: unknown): string {
   return exportValue(value).replace(/&/g, '&amp;').replace(/[\r\n\u2028\u2029]+/g, ' ').replace(/[|<>\[\]*`\\]/g, character => `&#${character.charCodeAt(0)};`);
 }
-export function exportInvestigationResults(rows: InvestigationResult[], format: 'csv' | 'alpha' | 'charlie'): string {
+function encodeTsvCell(value: string): string {
+  const clean = value.replace(/[\t\r\n]+/g, ' ').trim();
+  if (/^[=+\-@\t\r]/.test(clean)) return `'${clean}`;
+  return clean;
+}
+
+export function exportInvestigationResults(rows: InvestigationResult[], format: 'csv' | 'tsv' | 'md' | 'alpha' | 'charlie'): string {
   const normalized = rows.map(row => ({ ...row, freshness: investigationFreshness(row) }));
   // Retain all supplied evidence fields, including fields introduced by the backend.
   const columns = [...new Set(['ip', 'found', 'status', 'abuseScore', 'vtMalicious', 'compositeScore', 'verdict', 'countryCode', 'isp', 'totalAlertCount', 'topAttackType', 'attack_types', 'evidence', 'lastSeen', 'reputationSource', 'source', 'checkedAt', 'reputationCheckedAt', 'reputationFresh', 'freshness', 'savedToDb', 'error', ...rows.flatMap(row => Object.keys(row))])];
+  if (format === 'tsv') {
+    const header = columns.join('\t');
+    const lines = normalized.map(row => {
+      const values = row as Record<string, unknown>;
+      return columns.map(key => encodeTsvCell(exportValue(values[key]))).join('\t');
+    });
+    return [header, ...lines].join('\n');
+  }
+  if (format === 'md') {
+    const items = normalized.map(row => ({ ...row, countryCode: row.countryCode ?? undefined, compositeScore: undefined, found: row.found }));
+    return formatCharlieIocMarkdown(items, { includeSectionHeader: true, includeFootnote: true }).replaceAll('Threat Intel AbuseIPDB Score: N/A [Not Enriched]', 'Reputation Unknown [Not Enriched]');
+  }
   if (format !== 'csv') {
     const items = normalized.map(row => ({ ...row, countryCode: row.countryCode ?? undefined, compositeScore: undefined, found: row.found }));
     const formatter = format === 'alpha' ? formatAlphaIocMarkdown : formatCharlieIocMarkdown;

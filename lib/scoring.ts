@@ -108,11 +108,25 @@ export function calculateVerdictScore(input: ScoreInput, now: Date = new Date())
   );
 
   // --- Weight Allocation & Dynamic Re-normalization ---
+  const hasLocalSignal = alertCount > 0 || Boolean(input.lastSeen) || Boolean(input.hasCriticalOutcome);
   const baseWeightAbuse = hasAbuse ? 0.4 : 0;
   const baseWeightVT = hasVT ? 0.3 : 0;
-  const baseWeightLocal = 0.3;
+  const baseWeightLocal = hasLocalSignal ? 0.3 : 0;
 
   const totalBaseWeight = baseWeightAbuse + baseWeightVT + baseWeightLocal;
+  if (totalBaseWeight === 0) {
+    return {
+      compositeScore: 0,
+      verdict: 'Unknown',
+      verdictColor: 'slate',
+      components: {
+        abuseipdb: { rawScore: rawAbuse, weightedScore: 0, weight: 0 },
+        virustotal: { rawScore: rawVT, weightedScore: 0, weight: 0 },
+        localSignal: { rawScore: rawLocalSignal, weightedScore: 0, weight: 0, details: { volumeScore, targetSpreadScore, recencyMultiplier, criticalOutcomeBonus } },
+      },
+    };
+  }
+
   const weightAbuse = Number((baseWeightAbuse / totalBaseWeight).toFixed(3));
   const weightVT = Number((baseWeightVT / totalBaseWeight).toFixed(3));
   const weightLocal = Number((1 - (weightAbuse + weightVT)).toFixed(3));

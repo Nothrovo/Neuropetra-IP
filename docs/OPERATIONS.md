@@ -223,6 +223,12 @@ Machine `GET /api/blocklist` accepts a 43-character base64url bearer token. Stor
 
 The feed supports parameters `format` (`csv`, `txt`, `cdb`), `min_score` (0–100, default 75), `min_alerts` (0–20, default 1 in API; set `min_alerts=0` to include standalone reputation-only indicators without local alerts), `days` (lookback window), and `include_reputation=true` (evaluates `reputation_checked_at` for indicators where local `last_seen` is null).
 
+## Investigation exports and scoring normalization
+
+The investigation workbench supports exporting results in CSV, TSV (tab-separated values for spreadsheet pasting), IoC Report Markdown (`.md` table format formatted for SOC incident tickets), Alpha IoC, and Charlie IoC formats.
+
+The scoring engine blends external provider reputation (AbuseIPDB, VirusTotal) with local SOC telemetry. For indicators with local observations, local signal attributes (alert volume, target spread, recency, critical outcomes) are weighted alongside external reputation. For standalone reputation indicators where local alert counts are zero, external provider weights re-normalize dynamically so that high-confidence indicators (e.g. 100% AbuseIPDB score) reflect an accurate threat verdict without being penalized by unobserved local telemetry. A known zero abuse score preserves its distinct non-malicious status without conflating with unobserved indicators.
+
 Use `max_rows=1000` as an explicit operational bound; handlers currently allow selecting up to 10000. Exceeding the chosen cap returns `413`, not a silently truncated complete feed. CDB is IPv4-only (`422` if selected data contains IPv6). TXT/CSV support IPv6. Validate content and counts before atomically replacing any firewall list; the product does not deploy policy to a firewall.
 
 ## Verification

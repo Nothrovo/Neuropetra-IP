@@ -31,7 +31,7 @@ export default function InvestigationResults({
   disabled: boolean;
   canExport: boolean;
 }) {
-  const [format, setFormat] = useState<'csv' | 'alpha' | 'charlie'>('csv');
+  const [format, setFormat] = useState<'csv' | 'tsv' | 'md' | 'alpha' | 'charlie'>('csv');
   const [scope, setScope] = useState<'all' | 'selected'>('all');
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState('');
@@ -42,6 +42,18 @@ export default function InvestigationResults({
 
   const exportDisabled = disabled || !canExport || !exportRows.length;
   const content = () => exportInvestigationResults(exportRows, format);
+
+  const copySpecificFormat = async (targetFormat: 'tsv' | 'md', label: string) => {
+    if (exportDisabled) return;
+    try {
+      const text = exportInvestigationResults(exportRows, targetFormat);
+      await navigator.clipboard.writeText(text);
+      setNotice(`Copied ${label} to clipboard.`);
+      setTimeout(() => setNotice(''), 3000);
+    } catch {
+      setNotice('Clipboard unavailable.');
+    }
+  };
 
   const renderVerdictBadge = (row: InvestigationResult) => {
     const verdict = row.verdict ?? 'Unknown';
@@ -122,9 +134,11 @@ export default function InvestigationResults({
               onChange={e => setFormat(e.target.value as typeof format)}
               className="rounded-md border border-white/10 bg-[#141824] px-2.5 py-1.5 text-zinc-200 focus:border-indigo-500 focus:outline-none"
             >
-              <option value="csv">CSV</option>
-              <option value="alpha">Alpha IoC Markdown</option>
-              <option value="charlie">Charlie IoC Markdown</option>
+              <option value="csv">CSV (.csv)</option>
+              <option value="tsv">TSV / Excel (.tsv)</option>
+              <option value="md">IoC Report Markdown (.md)</option>
+              <option value="alpha">Alpha IoC Markdown (.md)</option>
+              <option value="charlie">Charlie IoC Markdown (.md)</option>
             </select>
           </label>
 
@@ -141,22 +155,42 @@ export default function InvestigationResults({
             </select>
           </label>
 
+          {/* Quick Copy Buttons */}
+          <div className="inline-flex rounded-md border border-white/10 bg-white/5 p-0.5">
+            <button
+              type="button"
+              disabled={exportDisabled}
+              onClick={() => copySpecificFormat('tsv', 'TSV')}
+              className="rounded px-2 py-1 text-[11px] font-mono text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
+              title="Copy as TSV for Excel / Spreadsheet paste"
+            >
+              Copy TSV
+            </button>
+            <button
+              type="button"
+              disabled={exportDisabled}
+              onClick={() => copySpecificFormat('md', 'IoC Markdown Report')}
+              className="rounded px-2 py-1 text-[11px] font-mono text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40 border-l border-white/10"
+              title="Copy as formatted IoC Markdown Report table"
+            >
+              Copy .md IoC
+            </button>
+          </div>
+
           <button
             type="button"
             disabled={exportDisabled}
             onClick={() => {
-              const url = URL.createObjectURL(
-                new Blob([content()], {
-                  type: format === 'csv' ? 'text/csv;charset=utf-8' : 'text/markdown;charset=utf-8',
-                })
-              );
+              const ext = format === 'csv' ? 'csv' : format === 'tsv' ? 'tsv' : 'md';
+              const mime = format === 'csv' ? 'text/csv;charset=utf-8' : format === 'tsv' ? 'text/tab-separated-values;charset=utf-8' : 'text/markdown;charset=utf-8';
+              const url = URL.createObjectURL(new Blob([content()], { type: mime }));
               const link = document.createElement('a');
               link.href = url;
-              link.download = `investigation-${format}.${format === 'csv' ? 'csv' : 'md'}`;
+              link.download = `investigation-${format}.${ext}`;
               link.click();
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}
-            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-white/10 disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-indigo-600/80 hover:bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
           >
             <Download className="h-3.5 w-3.5" />
             <span>Download</span>
@@ -169,7 +203,7 @@ export default function InvestigationResults({
               try {
                 await navigator.clipboard.writeText(content());
                 setCopied(true);
-                setNotice('Copied export to clipboard.');
+                setNotice(`Copied ${format.toUpperCase()} export to clipboard.`);
                 setTimeout(() => setCopied(false), 2000);
               } catch {
                 setNotice('Clipboard unavailable. Use Download instead.');

@@ -43,6 +43,7 @@ describe('rendered investigation workbench', () => {
     expect(html).toContain('/ip/8.8.8.8'); expect(html).toContain('Provider score'); expect(html).toContain('Local alerts');
     expect(html).toContain('Quota exhausted'); expect(html).toContain('fresh'); expect(html).toContain('Not saved');
     expect(html).toContain('CSV'); expect(html).toContain('Alpha'); expect(html).toContain('Charlie');
+    expect(html).toContain('Copy TSV'); expect(html).toContain('Copy .md IoC');
     expect(html).toContain('Local miss');
   });
   it('distinguishes persistence warnings from provider failures without dropping scores', () => {

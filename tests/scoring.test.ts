@@ -18,6 +18,29 @@ describe('Threat Verdict Scoring Engine', () => {
     expect(result.components.virustotal.rawScore).toBe(100);
   });
 
+  it('evaluates standalone reputation indicators without local alert penalty', () => {
+    const maliciousRep = calculateVerdictScore({ abuseScore: 100, totalAlertCount: 0 });
+    expect(maliciousRep.compositeScore).toBe(100);
+    expect(maliciousRep.verdict).toBe('Malicious');
+    expect(maliciousRep.verdictColor).toBe('red');
+    expect(maliciousRep.components.abuseipdb.weight).toBe(1);
+
+    const suspiciousRep = calculateVerdictScore({ abuseScore: 55, totalAlertCount: 0 });
+    expect(suspiciousRep.compositeScore).toBe(55);
+    expect(suspiciousRep.verdict).toBe('Suspicious');
+    expect(suspiciousRep.verdictColor).toBe('amber');
+
+    const lowRiskRep = calculateVerdictScore({ abuseScore: 14, totalAlertCount: 0 });
+    expect(lowRiskRep.compositeScore).toBe(14);
+    expect(lowRiskRep.verdict).toBe('Low risk');
+    expect(lowRiskRep.verdictColor).toBe('emerald');
+
+    const zeroRep = calculateVerdictScore({ abuseScore: 0, totalAlertCount: 0 });
+    expect(zeroRep.compositeScore).toBe(0);
+    expect(zeroRep.verdict).toBe('Unknown');
+    expect(zeroRep.verdictColor).toBe('slate');
+  });
+
   it('should automatically re-normalize weights when VirusTotal is missing', () => {
     const result = calculateVerdictScore({
       abuseScore: 80,

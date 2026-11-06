@@ -77,4 +77,21 @@ describe('workbench state and permissions', () => {
     expect(markdown).not.toContain('0%');
     expect(markdown).not.toContain('Clean');
   });
+  it('exports valid TSV for spreadsheets and clean IoC report markdown for reports', () => {
+    const rows = [
+      { ip: '195.178.110.159', found: true, abuseScore: 100, compositeScore: 100, verdict: 'Malicious' as const, countryCode: 'ID', isp: 'Internet Rakyat' },
+      { ip: '8.8.8.8', found: true, abuseScore: 0, compositeScore: 0, verdict: 'Unknown' as const, countryCode: 'US', isp: 'Google LLC' },
+    ];
+    const tsv = exportInvestigationResults(rows, 'tsv');
+    expect(tsv).toContain('ip\tfound\tstatus');
+    expect(tsv).toContain('195.178.110.159\ttrue\t');
+    expect(tsv).toContain('Internet Rakyat');
+
+    const mdReport = exportInvestigationResults(rows, 'md');
+    expect(mdReport).toContain('**2. INDICATOR OF COMPROMISE**');
+    expect(mdReport).toContain('| Tipe IoC | Nilai | Negara (ASN) | Keterangan |');
+    expect(mdReport).toContain('195.178.110.159');
+    expect(mdReport).toContain('Internet Rakyat');
+    expect(mdReport).toContain('Catatan: Validasi reputasi dan geolokasi IP diverifikasi melalui AbuseIPDB');
+  });
 });
