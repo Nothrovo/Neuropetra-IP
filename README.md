@@ -8,7 +8,8 @@ A standalone IP investigation application built with Next.js, TypeScript and Pos
 - Separate application-owned reputation storage: enrichment does not manufacture local observations or overwrite telemetry timestamps/counts.
 - Optional **AbuseIPDB** enrichment, disabled by default. Administrators can configure, test, and toggle API keys directly in the Web UI (`/settings/enrichment`) without backend or container restarts. Legacy VirusTotal fields can be displayed/scored when supplied by an integration; there is no live VirusTotal client.
 - Persisted users, salted scrypt password hashes, opaque server-side sessions, role checks, revocation and recent reauthentication for maintenance execution.
-- TXT/CSV feeds and IPv4-only Wazuh CDB output. CSV cells are escaped against spreadsheet formula injection; no export format is a substitute for reviewing a blocklist.
+- TXT/CSV feeds and IPv4-only Wazuh CDB output with configurable alert count threshold (0 includes standalone enriched reputation indicators; >= 1 requires local observed alerts). CSV cells are escaped against spreadsheet formula injection; no export format is a substitute for reviewing a blocklist.
+- Dynamic Macro Threat Analytics: Visualizes event telemetry and automatically falls back to enriched threat indicator aggregates (countries, providers, threat score distribution, activity timeline) when raw rule events are unpopulated.
 - Optional, narrowly scoped reputation invalidation/deletion with preview, confirmation, immutable snapshots and audit records. Retention is an explicitly approved **one-run job**, not an automatic recurring scheduler.
 
 A score of zero, missing reputation, and an **Unknown** verdict are not interchangeable. Scoring is a prioritization aid, not a guarantee that an address is safe or malicious. An empty installation contains no operational telemetry; importing an external source requires an explicitly reviewed integration.

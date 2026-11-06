@@ -51,7 +51,7 @@ const externalOutcome = z.looseObject({
 });
 
 export type InvestigationMode = 'local' | 'external';
-export type InvestigationSubmission = { ips: string[]; mode: InvestigationMode; cachePolicy: 'fresh-first' | 'force-refresh' };
+export type InvestigationSubmission = { ips: string[]; mode: InvestigationMode; cachePolicy: 'fresh-first' | 'force-refresh'; chunkSize?: number };
 export type InvestigationResult = Omit<BulkIpItem, 'countryCode'> & {
   countryCode?: string | null; source?: string; status?: string; error?: string | null;
   checkedAt?: string | null; reputationCheckedAt?: string | null; freshness?: string;
@@ -151,7 +151,7 @@ export async function runInvestigation(
   }
   let progress: InvestigationProgress = { results: [], completed: 0, total: submission.ips.length, status: 'running' };
   onProgress(progress);
-  const chunkSize = submission.mode === 'external' ? 100 : 200;
+  const chunkSize = Math.max(1, submission.chunkSize ?? (submission.mode === 'external' ? 100 : 200));
   for (let offset = 0; offset < submission.ips.length; offset += chunkSize) {
     if (signal.aborted) { progress = { ...progress, status: 'cancelled' }; break; }
     const ips = submission.ips.slice(offset, offset + chunkSize);

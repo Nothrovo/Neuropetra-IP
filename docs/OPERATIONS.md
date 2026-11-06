@@ -221,6 +221,8 @@ Permanent destruction is **not the default uninstall** and has no copy-paste del
 
 Machine `GET /api/blocklist` accepts a 43-character base64url bearer token. Store only its SHA-256 hash in `app_feed_tokens` with `feed:read`, an expiry and a unique ID; revocation is a timestamp. Issuance/rotation/revocation requires a reviewed operator database integration—there is no supplied CLI/UI for it. Use independent least-privilege integration access, never give clients the auth database credential. Do not put tokens in query strings, logs, frontend bundles or public instructions.
 
+The feed supports parameters `format` (`csv`, `txt`, `cdb`), `min_score` (0–100, default 75), `min_alerts` (0–20, default 1 in API; set `min_alerts=0` to include standalone reputation-only indicators without local alerts), `days` (lookback window), and `include_reputation=true` (evaluates `reputation_checked_at` for indicators where local `last_seen` is null).
+
 Use `max_rows=1000` as an explicit operational bound; handlers currently allow selecting up to 10000. Exceeding the chosen cap returns `413`, not a silently truncated complete feed. CDB is IPv4-only (`422` if selected data contains IPv6). TXT/CSV support IPv6. Validate content and counts before atomically replacing any firewall list; the product does not deploy policy to a firewall.
 
 ## Verification

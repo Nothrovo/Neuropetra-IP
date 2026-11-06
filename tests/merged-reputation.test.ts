@@ -41,6 +41,7 @@ describe('merged reputation read model in mock mode', () => {
     expect(summary).toMatchObject({ ip_count: 1, total_alerts: 0, last_seen: null, max_abuse_score: 0, avg_abuse_score: 0 });
     expect(await db.getProviderDetail('Synthetic reputation-only provider')).toMatchObject({ summary, attackTypes: [], targetHosts: [] });
     expect((await db.getBlocklistData({ minScore: 0, minAlerts: 0 })).some(row => row.ip === '203.0.113.222')).toBe(false);
+    expect((await db.getBlocklistData({ minScore: 0, minAlerts: 0, includeReputation: true })).some(row => row.ip === '203.0.113.222')).toBe(true);
   });
 
   it('reads a reputation write consistently across IP, provider, roster, export and observed feed without changing telemetry', async () => {

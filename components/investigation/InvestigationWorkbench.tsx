@@ -40,7 +40,7 @@ export default function InvestigationWorkbench({ initialInput = '', initialMode 
 
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if (disabled) return;
-    const submission: InvestigationSubmission = { ips: state.mode === 'local' ? parsed.valid : selectedEligible, mode: state.mode, cachePolicy: state.mode === 'local' ? 'fresh-first' : cachePolicy };
+    const submission: InvestigationSubmission = { ips: state.mode === 'local' ? parsed.valid : selectedEligible, mode: state.mode, cachePolicy: state.mode === 'local' ? 'fresh-first' : cachePolicy, chunkSize: state.mode === 'external' ? 10 : 200 };
     const id = ++job.current;
     controller.current?.abort();
     const abort = new AbortController(); controller.current = abort;
@@ -82,7 +82,26 @@ export default function InvestigationWorkbench({ initialInput = '', initialMode 
       <details><summary>Submitted indicators</summary><pre className="max-h-32 overflow-auto whitespace-pre-wrap">{snapshot.submission.ips.join('\n')}</pre></details>
       {stale && <p role="status" className="text-amber-300">Input changed. Results below belong to the submitted snapshot, not current input. Selection cleared; submit again to refresh.</p>}
       {snapshot.submission.mode !== state.mode && <p className="text-amber-300">Results are from {snapshot.submission.mode === 'local' ? 'Local Lookup' : 'External Enrichment'}; switching modes does not send requests.</p>}
-      {progress && <><p role="status">{progress.status}: {progress.completed} / {progress.total} indicators processed{progress.status === 'partial' ? ' — some results failed or remain unprocessed.' : ''}</p><progress className="w-full" max={progress.total || 1} value={progress.completed} aria-label="Investigation progress" /></>}
+      {progress && (
+        <div className="space-y-1.5 pt-2">
+          <div className="flex items-center justify-between text-xs font-mono text-zinc-300">
+            <span className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${progress.status === 'running' ? 'animate-pulse bg-indigo-400' : progress.status === 'completed' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className="capitalize">{progress.status}</span>: {progress.completed} / {progress.total} indicators processed{progress.status === 'partial' ? ' — some results failed or remain unprocessed.' : ''}
+            </span>
+            <span className="font-semibold text-white">
+              {Math.round(((progress.completed || 0) / (progress.total || 1)) * 100)}%
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800 border border-white/10">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-400 transition-all duration-300 ease-out"
+              style={{ width: `${Math.min(100, Math.round(((progress.completed || 0) / (progress.total || 1)) * 100))}%` }}
+            />
+          </div>
+          <progress className="sr-only" max={progress.total || 1} value={progress.completed} aria-label="Investigation progress" />
+        </div>
+      )}
       {progress?.status === 'cancelled' && <p className="text-amber-300">Cancelled remaining work. Completed results are retained. In-flight external work may already have consumed quota or saved reputation; cancellation does not roll it back.</p>}
     </section>}
     <InvestigationResults results={progress?.results ?? []} selected={state.selected} onSelectionChange={selected => setState(previous => ({ ...previous, selected }))} disabled={running || stale} canExport={!!session?.permissions?.includes('export')} />

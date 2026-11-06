@@ -7,7 +7,7 @@ import DefangButton from '@/components/DefangButton';
 
 export default function BlocklistPage() {
   const [minScore, setMinScore] = useState(75);
-  const [minAlerts, setMinAlerts] = useState(1);
+  const [minAlerts, setMinAlerts] = useState(0);
   const [days, setDays] = useState(30);
 
   // Fetch blocklist preview
@@ -15,7 +15,7 @@ export default function BlocklistPage() {
     queryKey: ['blocklist-preview', minScore, minAlerts, days],
     queryFn: async () => {
       const res = await fetch(
-        `/api/blocklist?format=csv&min_score=${minScore}&min_alerts=${minAlerts}&days=${days}`
+        `/api/blocklist?format=csv&min_score=${minScore}&min_alerts=${minAlerts}&days=${days}&include_reputation=true`
       );
       if (!res.ok) throw new Error('Failed to load blocklist preview');
       const text = await res.text();
@@ -37,7 +37,7 @@ export default function BlocklistPage() {
   const matchingRows = previewData || [];
 
   function getDownloadUrl(format: 'txt' | 'csv' | 'cdb') {
-    return `/api/blocklist?format=${format}&min_score=${minScore}&min_alerts=${minAlerts}&days=${days}`;
+    return `/api/blocklist?format=${format}&min_score=${minScore}&min_alerts=${minAlerts}&days=${days}&include_reputation=true`;
   }
 
   return (
@@ -96,17 +96,22 @@ export default function BlocklistPage() {
             <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
               <div className="flex justify-between font-mono">
                 <label className="text-zinc-300 font-medium font-sans">Minimum Alert Count:</label>
-                <span className="text-zinc-200 font-bold font-tabular">&ge; {minAlerts} alerts</span>
+                <span className="text-zinc-200 font-bold font-tabular">
+                  {minAlerts === 0 ? '0 (All Threat Intel)' : `≥ ${minAlerts} alerts`}
+                </span>
               </div>
               <input
                 type="range"
-                min="1"
+                min="0"
                 max="20"
                 step="1"
                 value={minAlerts}
                 onChange={(e) => setMinAlerts(parseInt(e.target.value, 10))}
                 className="w-full accent-white"
               />
+              <span className="text-[10px] text-zinc-500 block">
+                0 includes both pure external threat reputation and local observed alerts.
+              </span>
             </div>
 
             {/* Active Within Days */}

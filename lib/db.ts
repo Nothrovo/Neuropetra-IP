@@ -242,14 +242,21 @@ export async function getBlocklistData(options: {
   minAlerts?: number;
   maxAgeDays?: number;
   maxRows?: number;
+  includeReputation?: boolean;
 }): Promise<{ ip: string; abuse_score: number|null; vt_malicious: number|null; total_alert_count: number; country_code: string|null; attack_types: string[] }[]> {
   const minScore = options.minScore ?? 75;
   const minAlerts = options.minAlerts ?? 1;
   const maxAgeDays = options.maxAgeDays ?? 30;
+  const includeRep = options.includeReputation === true;
 
   if (isMock) {
     return mockIntels().filter(
-      (c) => ((c.abuse_score ?? -1) >= minScore || (c.vt_malicious ?? 0) >= 5) && c.total_alert_count >= minAlerts && Date.parse(c.last_seen??'')>=Date.now()-maxAgeDays*86400000 && Date.parse(c.last_seen??'')<Date.now()
+      (c) => ((c.abuse_score ?? -1) >= minScore || (c.vt_malicious ?? 0) >= 5) &&
+             c.total_alert_count >= minAlerts &&
+             (
+               (c.last_seen && Date.parse(c.last_seen) >= Date.now() - maxAgeDays * 86400000 && Date.parse(c.last_seen) < Date.now()) ||
+               (includeRep && !c.last_seen && c.reputation_checked_at && Date.parse(c.reputation_checked_at) >= Date.now() - maxAgeDays * 86400000 && Date.parse(c.reputation_checked_at) < Date.now())
+             )
     ).map((c) => ({
       ip: c.ip,
       abuse_score: c.abuse_score,
@@ -265,10 +272,13 @@ export async function getBlocklistData(options: {
        FROM ${intelRelation}
       WHERE (abuse_score >= $1 OR vt_malicious >= 5)
         AND total_alert_count >= $2
-        AND last_seen >= NOW() - ($3 || ' days')::INTERVAL
-      AND last_seen < NOW()
+        AND (
+          (last_seen >= NOW() - ($3 || ' days')::INTERVAL AND last_seen < NOW())
+          OR
+          ($5::boolean = true AND last_seen IS NULL AND reputation_checked_at >= NOW() - ($3 || ' days')::INTERVAL AND reputation_checked_at < NOW())
+        )
       ORDER BY total_alert_count DESC, abuse_score DESC LIMIT $4`,
-    [minScore, minAlerts, maxAgeDays.toString(),(options.maxRows??10000)+1]
+    [minScore, minAlerts, maxAgeDays.toString(), (options.maxRows ?? 10000) + 1, includeRep]
   );
 }
 
@@ -283,14 +293,33 @@ export async function getDashboardAnalytics(days=30,explicitScope?:TelemetryScop
  }
  const {where,params}=eventPredicate(null,scope);
  const aggregate=async(expression:string,join='')=>query<{key:string;count:string}>(`WITH scoped AS (SELECT * FROM ip_intel_events WHERE ${where}) SELECT ${expression} AS key,COUNT(*) AS count FROM scoped e ${join} GROUP BY key ORDER BY count DESC,key LIMIT 10`,params);
- const [countries,asns,types,mitre,outcomes,timeline]=await Promise.all([
+ const [types,mitre]=await Promise.all([
+  aggregate('e.attack_subtype','WHERE e.attack_subtype IS NOT NULL'),
+  aggregate('m.id','CROSS JOIN LATERAL unnest(e.mitre) m(id)')
+ ]);
+ let [countries,asns,outcomes,timeline]=await Promise.all([
   aggregate('intel.country_code',`JOIN ${intelRelation} ON intel.ip=e.ip WHERE intel.country_code IS NOT NULL`),
   aggregate('intel.isp',`JOIN ${intelRelation} ON intel.ip=e.ip WHERE intel.isp IS NOT NULL`),
-  aggregate('e.attack_subtype','WHERE e.attack_subtype IS NOT NULL'),
-  aggregate('m.id','CROSS JOIN LATERAL unnest(e.mitre) m(id)'),
   aggregate("COALESCE(e.outcome,'unspecified')"),
   query<{date:string;count:string}>(`SELECT TO_CHAR(seen_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS date,COUNT(*) AS count FROM ip_intel_events WHERE ${where} GROUP BY date ORDER BY date`,params)
  ]);
+ if (countries.length === 0 && timeline.length === 0) {
+  const eventsExist = await query<{exists:boolean}>('SELECT EXISTS(SELECT 1 FROM ip_intel_events LIMIT 1) AS exists');
+  if (!eventsExist[0]?.exists) {
+   const [repCountries, repAsns, repOutcomes, repTimeline] = await Promise.all([
+    query<{key:string;count:string}>(`SELECT country_code AS key, COUNT(*) AS count FROM ${intelRelation} WHERE country_code IS NOT NULL AND COALESCE(last_seen, reputation_checked_at) >= $1::timestamptz AND COALESCE(last_seen, reputation_checked_at) < $2::timestamptz GROUP BY country_code ORDER BY count DESC, country_code LIMIT 10`, [scope.from, scope.to]),
+    query<{key:string;count:string}>(`SELECT isp AS key, COUNT(*) AS count FROM ${intelRelation} WHERE isp IS NOT NULL AND COALESCE(last_seen, reputation_checked_at) >= $1::timestamptz AND COALESCE(last_seen, reputation_checked_at) < $2::timestamptz GROUP BY isp ORDER BY count DESC, isp LIMIT 10`, [scope.from, scope.to]),
+    query<{key:string;count:string}>(`SELECT CASE WHEN abuse_score >= 75 THEN 'malicious' WHEN abuse_score >= 40 THEN 'suspicious' WHEN abuse_score IS NOT NULL THEN 'low-risk' ELSE 'unknown' END AS key, COUNT(*) AS count FROM ${intelRelation} WHERE COALESCE(last_seen, reputation_checked_at) >= $1::timestamptz AND COALESCE(last_seen, reputation_checked_at) < $2::timestamptz GROUP BY key ORDER BY count DESC`, [scope.from, scope.to]),
+    query<{date:string;count:string}>(`SELECT TO_CHAR(COALESCE(last_seen, reputation_checked_at) AT TIME ZONE 'UTC','YYYY-MM-DD') AS date, COUNT(*) AS count FROM ${intelRelation} WHERE COALESCE(last_seen, reputation_checked_at) >= $1::timestamptz AND COALESCE(last_seen, reputation_checked_at) < $2::timestamptz GROUP BY date ORDER BY date`, [scope.from, scope.to])
+   ]);
+   if (repCountries.length > 0 || repTimeline.length > 0) {
+    countries = repCountries;
+    asns = repAsns;
+    outcomes = repOutcomes;
+    timeline = repTimeline;
+   }
+  }
+ }
  return {scope,units:{topCountries:'events',topAsns:'events',topAttackTypes:'events',topMitre:'event-technique associations',outcomeDistribution:'events',timeline:'events'},topCountries:countries.map(r=>({code:r.key,count:Number(r.count)})),topAsns:asns.map(r=>({name:r.key,count:Number(r.count)})),topAttackTypes:types.map(r=>({type:r.key,count:Number(r.count)})),topMitre:mitre.map(r=>({id:r.key,count:Number(r.count)})),outcomeDistribution:outcomes.map(r=>({outcome:r.key,count:Number(r.count)})),timeline:timeline.map(r=>({date:r.date,attacks:Number(r.count)}))};
 }
 
