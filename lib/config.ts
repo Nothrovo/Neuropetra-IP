@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import ipaddr from 'ipaddr.js';
 
 export type DatabaseScope = 'auth' | 'read' | 'reputation' | 'maintenance';
 const databaseKeys: Record<DatabaseScope, string> = {
@@ -36,16 +37,28 @@ export function hasDatabase(scope: DatabaseScope): boolean {
   return Boolean(readSecret(databaseKeys[scope]));
 }
 
+export function isSafeHttpHost(hostname: string): boolean {
+  if (hostname === 'localhost') return true;
+  const rawHost = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+  if (!ipaddr.isValid(rawHost)) return false;
+  try {
+    const range = ipaddr.parse(rawHost).range();
+    return range === 'loopback' || range === 'private' || range === 'uniqueLocal';
+  } catch {
+    return false;
+  }
+}
+
 export function getAppOrigin(): string {
   const value = process.env.APP_ORIGIN;
   if (!value) throw new Error('Missing APP_ORIGIN');
   try {
     const url = new URL(value);
-    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    const safeHost = isSafeHttpHost(url.hostname);
     if (url.origin !== value || url.username || url.password ||
-      !(url.protocol === 'https:' || (url.protocol === 'http:' && loopback))) throw new Error();
+      !(url.protocol === 'https:' || (url.protocol === 'http:' && safeHost))) throw new Error();
     return url.origin;
-  } catch { throw new Error('Invalid APP_ORIGIN: use HTTPS or loopback HTTP origin without a path'); }
+  } catch { throw new Error('Invalid APP_ORIGIN: use HTTPS or private/loopback HTTP origin without a path'); }
 }
 
 export function getCapabilities() {

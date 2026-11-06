@@ -83,7 +83,7 @@ The shipped **analyst** role has investigation/read permission only. The **admin
 
 | Setting | Meaning |
 | --- | --- |
-| `APP_ORIGIN` | Required canonical browser origin, no path/trailing slash. HTTPS except for loopback HTTP. Do not derive it from request Host/forwarded headers. |
+| `APP_ORIGIN` | Required canonical browser origin, no path/trailing slash. HTTPS required for public domains/IPs; plain HTTP permitted for loopback and private LAN addresses (RFC 1918 / RFC 4193). Do not derive it from request Host/forwarded headers. |
 | `AUTH_DATABASE_URL[_FILE]` | Users, installation state, sessions and authentication throttling. |
 | `READ_DATABASE_URL[_FILE]` | Telemetry/reputation reads and permitted maintenance metadata reads. |
 | `REPUTATION_DATABASE_URL[_FILE]` | Owned reputation writer; no telemetry writes. |
@@ -92,6 +92,7 @@ The shipped **analyst** role has investigation/read permission only. The **admin
 | `ABUSEIPDB_API_KEY[_FILE]` | Optional server-side provider credential; never commit it. |
 | `USE_MOCK_DATA` | Synthetic telemetry for development/tests, **not** an authentication or PostgreSQL bypass. |
 | `APP_PORT` | Compose host port, default `3000`; update `APP_ORIGIN` to match. |
+| `APP_BIND_IP` | Compose host interface to bind, default `0.0.0.0` (all interfaces); set to `127.0.0.1` when placing behind a local reverse proxy. |
 
 There is no generic `DATABASE_URL`, default localhost database connection, `AUTH_USER`/`AUTH_PASS` login, or automatically provisioned analyst.
 

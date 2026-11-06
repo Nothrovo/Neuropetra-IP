@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     ports:
-      - "127.0.0.1:${APP_PORT:-3000}:3000"
+      - "${APP_BIND_IP:-127.0.0.1}:${APP_PORT:-3000}:3000"
     environment:
       APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:3000}
       AUTH_DATABASE_URL_FILE: /run/secrets/auth_database_url
@@ -22,8 +22,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    security_opt:
-      - no-new-privileges:true
+    # Note: no-new-privileges is deliberately omitted to prevent AppArmor EPERM
+    # collisions on Ubuntu hosts with AppArmor / Docker snap during entrypoint exec.
     cap_drop:
       - ALL
     healthcheck:
