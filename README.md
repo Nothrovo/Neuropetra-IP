@@ -6,7 +6,7 @@ A standalone IP investigation application built with Next.js, TypeScript and Pos
 
 - Authenticated local investigation, bulk input, event history, dashboard aggregates and MITRE technique mapping.
 - Separate application-owned reputation storage: enrichment does not manufacture local observations or overwrite telemetry timestamps/counts.
-- Optional **AbuseIPDB** enrichment, disabled by default. Legacy VirusTotal fields can be displayed/scored when supplied by an integration; there is no live VirusTotal client.
+- Optional **AbuseIPDB** enrichment, disabled by default. Administrators can configure, test, and toggle API keys directly in the Web UI (`/settings/enrichment`) without backend or container restarts. Legacy VirusTotal fields can be displayed/scored when supplied by an integration; there is no live VirusTotal client.
 - Persisted users, salted scrypt password hashes, opaque server-side sessions, role checks, revocation and recent reauthentication for maintenance execution.
 - TXT/CSV feeds and IPv4-only Wazuh CDB output. CSV cells are escaped against spreadsheet formula injection; no export format is a substitute for reviewing a blocklist.
 - Optional, narrowly scoped reputation invalidation/deletion with preview, confirmation, immutable snapshots and audit records. Retention is an explicitly approved **one-run job**, not an automatic recurring scheduler.

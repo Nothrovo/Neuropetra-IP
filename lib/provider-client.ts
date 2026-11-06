@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { readSecret } from './config';
 import { isGlobalIp, normalizeIp } from './ip-validator';
+import { getActiveApiKey, isEnrichmentActive } from './enrichment-settings';
 export const REPUTATION_TTL_HOURS = 168;
 export function isReputationFresh(checkedAt:string|null,now=new Date(),ttlHours=REPUTATION_TTL_HOURS):boolean {
  const age=checkedAt?now.getTime()-Date.parse(checkedAt):NaN;
@@ -17,9 +18,19 @@ export interface ProviderResult {ip:string;abuseScore:number;countryCode:string|
 export async function lookupReputation(input:string,signal?:AbortSignal,dependencies?:{fetch:typeof fetch;timeoutMs?:number}):Promise<ProviderResult> {
  const ip=normalizeIp(input);
  if(!isGlobalIp(ip))throw new ProviderError('non_global','External lookup requires global unicast');
- let apiKey:string|undefined;
- try{apiKey=readSecret('ABUSEIPDB_API_KEY')?.trim();}catch{throw new ProviderError('disabled','External enrichment is disabled or not configured');}
- if(process.env.ENABLE_EXTERNAL_ENRICHMENT!=='true'||!apiKey||(process.env.USE_MOCK_DATA==='true'&&!dependencies))throw new ProviderError('disabled','External enrichment is disabled or not configured');
+ let apiKey: string | undefined;
+ let isEnabled = false;
+ try {
+  const dynamicKey = await getActiveApiKey();
+  apiKey = dynamicKey ?? readSecret('ABUSEIPDB_API_KEY')?.trim();
+  isEnabled = await isEnrichmentActive();
+ } catch {
+  apiKey = readSecret('ABUSEIPDB_API_KEY')?.trim();
+  isEnabled = process.env.ENABLE_EXTERNAL_ENRICHMENT === 'true' && Boolean(apiKey);
+ }
+ if ((!isEnabled && !dependencies) || !apiKey || (process.env.USE_MOCK_DATA === 'true' && !dependencies)) {
+  throw new ProviderError('disabled', 'External enrichment is disabled or not configured');
+ }
  if(signal?.aborted)throw new ProviderError('cancelled','Lookup cancelled');
  const controller=new AbortController();let timedOut=false;
  const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});

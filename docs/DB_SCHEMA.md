@@ -21,6 +21,7 @@ Two distinct version tables exist:
 | `002_auth.sql` | Durable installation marker, users, sessions, auth-attempt buckets and auth grants. |
 | `003_maintenance.sql` | Global reputation revision sequence/triggers, immutable maintenance plans, jobs, one-run retention policies, append-oriented audit and scoped grants. |
 | `004_feed_tokens.sql` | Hashed, scoped, expiring/revocable machine feed credentials. |
+| `005_enrichment_settings.sql` | Extends `ip_intel_installation` with in-app configurable `abuseipdb_api_key` and `external_enrichment_enabled` fields. |
 
 The initial migration requires cache/events to be both present or both absent, validates all consumed column types (including text array element types) and refuses incompatible schemas. It does not automatically convert existing telemetry or validate every possible legacy constraint. Do not use this as a license to run it on a shared SOC database. Map/copy externally sourced data through an explicitly reviewed integration into the dedicated schema.
 

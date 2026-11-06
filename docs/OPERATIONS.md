@@ -111,7 +111,11 @@ Readiness `503` means investigate configuration, network access, permissions and
 
 Only AbuseIPDB is implemented as a live client. The flag is disabled by default. Enable `ENABLE_EXTERNAL_ENRICHMENT=true` only after supplying a provider key and a scoped reputation writer. Queries require global-unicast IPs; localhost/private/reserved addresses are not eligible for provider egress. Results have a seven-day freshness window; provider failures are surfaced, not treated as clean reputation. Monitor quota independently.
 
-For host use, prefer `ABUSEIPDB_API_KEY_FILE=/protected/abuseipdb-key`. For the supplied Compose root, the existing supported interface is the direct `ABUSEIPDB_API_KEY` environment variable; inject it from a secret manager/private runtime environment together with the enable flag, then recreate the app. Do not put it in the committed YAML or `.env.example`, shell history, or command-line literals. Docker environment access can reveal direct variables to privileged operators. Using a Compose file-secret instead requires a local reviewed overlay that mounts the key and sets `_FILE` while leaving the direct variable unset/empty. The supplied root does not mount a provider key file automatically. Do not set both sources.
+### In-UI Management (Recommended)
+Administrators can configure the AbuseIPDB API key and toggle live lookups directly from the Web UI under **Settings > External Enrichment** (`/settings/enrichment`). The key is stored securely in PostgreSQL (`ip_intel_installation.abuseipdb_api_key`) and takes effect immediately without container restarts. The UI also provides a live connection test button to verify provider connectivity and API key validity before saving.
+
+### Environment Variable Fallback
+For host use or headless environments, prefer `ABUSEIPDB_API_KEY_FILE=/protected/abuseipdb-key` or `ABUSEIPDB_API_KEY` in your private environment file. Database-configured keys in `ip_intel_installation` take precedence over environment variables when present. Do not put secrets in committed YAML, `.env.example`, shell history, or command-line literals. Setting both `NAME` and `NAME_FILE` is rejected.
 
 ## Optional maintenance and one-run retention
 

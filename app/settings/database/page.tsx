@@ -1,6 +1,7 @@
 'use client';
 
 import React,{useCallback,useEffect,useState} from 'react';
+import { SettingsNav } from '@/components/settings/SettingsNav';
 import type {DatabaseStatus,OwnedRecord,MaintenancePlan,MaintenanceJob} from '../../../lib/database-management';
 
 async function api<T>(url:string,body?:unknown):Promise<T> {
@@ -52,8 +53,13 @@ export default function DatabasePage(){
  async function cancel(jobId:string){
   try {await api('/api/auth/reauth',{password});setPassword('');await api(base+'/maintenance/cancel',{jobId});await refresh();setMessage('Queued job cancelled. No batch committed.');}finally{setPassword('');}
  }
- return <main className="mx-auto max-w-6xl space-y-6 p-6 text-slate-100">
-  <header><p className="text-sm text-slate-400">Settings / Administrator</p><h1 className="text-3xl font-semibold">Database Management</h1><p>No shared telemetry, indicator identity, accounts or audit records can be deleted here. Only Neuropetra IP-owned reputation metadata is writable.</p></header>
+ return <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 text-zinc-100">
+  <header>
+    <p className="text-xs font-mono uppercase tracking-wider text-zinc-500">Settings / Administrator</p>
+    <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Database Management</h1>
+    <p className="mt-1.5 text-sm text-zinc-400">No shared telemetry, indicator identity, accounts or audit records can be deleted here. Only Neuropetra IP-owned reputation metadata is writable.</p>
+  </header>
+  <SettingsNav />
   {error&&<div role="alert" className="rounded border border-red-500 p-3">{error} — Retry the connection check; for a changed/expired preview, preview the selection again.</div>}
   {message&&<p role="status" className="rounded border border-emerald-600 p-3">{message}</p>}
   <section aria-label="Database connection" className="space-y-3 rounded border border-slate-700 p-4">
