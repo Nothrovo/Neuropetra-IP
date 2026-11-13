@@ -11,6 +11,7 @@ interface SummaryResponse extends IpSummary {scope:TelemetryScope}
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Layers,RefreshCw,ChevronLeft,HelpCircle,Copy,Check } from 'lucide-react';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import ScoreGauge from '@/components/ScoreGauge';
 import DefangButton from '@/components/DefangButton';
 import MitreHeatmap from '@/components/MitreHeatmap';
@@ -64,10 +65,12 @@ export default function IpDetailPage() {
     },
   });
 
-  function handleCopyIp() {
-    navigator.clipboard.writeText(rawIp);
-    setCopiedIp(true);
-    setTimeout(() => setCopiedIp(false), 2000);
+  async function handleCopyIp() {
+    const success = await copyTextToClipboard(rawIp);
+    if (success) {
+      setCopiedIp(true);
+      setTimeout(() => setCopiedIp(false), 2000);
+    }
   }
 
   if (isLoadingIntel) {

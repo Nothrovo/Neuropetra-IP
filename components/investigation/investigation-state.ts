@@ -112,6 +112,57 @@ export function investigationFreshness(row: InvestigationResult): string {
   if (row.status === 'enriched') return fresh ? 'Fresh provider result' : 'Stale provider result';
   return 'Freshness unknown';
 }
+export function isLocalIndicator(row: { ip: string; status?: string; source?: string }): boolean {
+  if (!row?.ip) return false;
+  if (!isGlobalIp(row.ip)) return true;
+  if (row.status === 'private' || row.source === 'local_private') return true;
+  return false;
+}
+
+const VERDICT_SEVERITY: Record<string, number> = {
+  'Malicious': 4,
+  'Suspicious': 3,
+  'Low risk': 2,
+  'Unknown': 1,
+};
+
+export function getThreatScore(row: InvestigationResult): number {
+  return row.compositeScore ?? row.abuseScore ?? 0;
+}
+
+export function sortInvestigationResults(results: InvestigationResult[]): InvestigationResult[] {
+  return [...results].sort((a, b) => {
+    const aLocal = isLocalIndicator(a);
+    const bLocal = isLocalIndicator(b);
+
+    if (aLocal && !bLocal) return 1;
+    if (!aLocal && bLocal) return -1;
+    if (aLocal && bLocal) {
+      return a.ip.localeCompare(b.ip, undefined, { numeric: true });
+    }
+
+    const aVerdictSev = VERDICT_SEVERITY[a.verdict ?? 'Unknown'] ?? 0;
+    const bVerdictSev = VERDICT_SEVERITY[b.verdict ?? 'Unknown'] ?? 0;
+    if (bVerdictSev !== aVerdictSev) {
+      return bVerdictSev - aVerdictSev;
+    }
+
+    const aScore = getThreatScore(a);
+    const bScore = getThreatScore(b);
+    if (bScore !== aScore) {
+      return bScore - aScore;
+    }
+
+    const aAlerts = a.totalAlertCount ?? 0;
+    const bAlerts = b.totalAlertCount ?? 0;
+    if (bAlerts !== aAlerts) {
+      return bAlerts - aAlerts;
+    }
+
+    return a.ip.localeCompare(b.ip, undefined, { numeric: true });
+  });
+}
+
 function exportValue(value: unknown): string {
   return value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
@@ -125,7 +176,8 @@ function encodeTsvCell(value: string): string {
 }
 
 export function exportInvestigationResults(rows: InvestigationResult[], format: 'csv' | 'tsv' | 'md' | 'alpha' | 'charlie'): string {
-  const normalized = rows.map(row => ({ ...row, freshness: investigationFreshness(row) }));
+  const sorted = sortInvestigationResults(rows);
+  const normalized = sorted.map(row => ({ ...row, freshness: investigationFreshness(row) }));
   // Retain all supplied evidence fields, including fields introduced by the backend.
   const columns = [...new Set(['ip', 'found', 'status', 'abuseScore', 'vtMalicious', 'compositeScore', 'verdict', 'countryCode', 'isp', 'totalAlertCount', 'topAttackType', 'attack_types', 'evidence', 'lastSeen', 'reputationSource', 'source', 'checkedAt', 'reputationCheckedAt', 'reputationFresh', 'freshness', 'savedToDb', 'error', ...rows.flatMap(row => Object.keys(row))])];
   if (format === 'tsv') {
@@ -163,7 +215,6 @@ export async function runInvestigation(
   request: typeof fetch = fetch,
 ): Promise<InvestigationProgress> {
   const parsed = parseIndicatorInput(submission.ips.join('\n'));
-  if (submission.mode === 'external' && submission.ips.some(ip => !isGlobalIp(ip))) throw new Error('External enrichment requires public IP indicators.');
   if (!submission.ips.length || submission.ips.length > 200 || parsed.invalid.length || parsed.duplicateCount || parsed.valid.length !== submission.ips.length || (submission.mode === 'local' && submission.cachePolicy !== 'fresh-first')) {
     throw new Error('Submit 1–200 unique valid IPs. Local lookup cannot force refresh.');
   }

@@ -104,12 +104,16 @@ describe('investigation transport', () => {
     expect(result.status).toBe('partial'); expect(result.completed).toBe(1);
     expect(result.results[0]?.abuseScore).toBe(98); expect(result.results[1]?.error).toContain('unconfirmed');
   });
-  it('blocks non-public external indicators before any transport and honours cancellation before the first batch', async () => {
-    const request = vi.fn<typeof fetch>();
-    await expect(runInvestigation({ ips: ['10.0.0.1'], mode: 'external', cachePolicy: 'fresh-first' }, new AbortController().signal, vi.fn(), request)).rejects.toThrow();
+  it('supports non-public external indicators via local_private outcomes and honours cancellation before the first batch', async () => {
+    const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      success: true,
+      results: [externalFailure({ ip: '10.0.0.1', status: 'private', source: 'local_private', error: 'Non-global indicator; no external lookup performed' })],
+    })));
+    const res = await runInvestigation({ ips: ['10.0.0.1'], mode: 'external', cachePolicy: 'fresh-first' }, new AbortController().signal, vi.fn(), request);
+    expect(res.results[0]?.status).toBe('private');
     const controller = new AbortController(); controller.abort();
     const result = await runInvestigation({ ips: ['8.8.8.8'], mode: 'external', cachePolicy: 'fresh-first' }, controller.signal, vi.fn(), request);
-    expect(result.status).toBe('cancelled'); expect(result.completed).toBe(0); expect(request).not.toHaveBeenCalled();
+    expect(result.status).toBe('cancelled'); expect(result.completed).toBe(0);
   });
   it('does not claim completion when an in-flight request is aborted', async () => {
     const controller = new AbortController();

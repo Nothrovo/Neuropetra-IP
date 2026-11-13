@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { defang } from '@/lib/ip-validator';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { Copy, Check, ShieldCheck } from 'lucide-react';
 
 export default function DefangButton({ ip }: { ip: string }) {
@@ -9,10 +10,12 @@ export default function DefangButton({ ip }: { ip: string }) {
 
   const defangedIp = defang(ip);
 
-  function copyToClipboard(text: string, type: 'raw' | 'defanged') {
-    navigator.clipboard.writeText(text);
-    setCopiedType(type);
-    setTimeout(() => setCopiedType(null), 2000);
+  async function copyToClipboard(text: string, type: 'raw' | 'defanged') {
+    const success = await copyTextToClipboard(text);
+    if (success) {
+      setCopiedType(type);
+      setTimeout(() => setCopiedType(null), 2000);
+    }
   }
 
   return (

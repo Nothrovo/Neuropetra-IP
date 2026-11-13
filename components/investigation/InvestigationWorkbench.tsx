@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { parseIndicatorInput } from '../../lib/investigation-input';
-import { isGlobalIp } from '../../lib/ip-validator';
 import IndicatorInput from './IndicatorInput';
 import InvestigationResults from './InvestigationResults';
 import { externalDisabledReason, initialInvestigationState, runInvestigation, switchInvestigationMode, updateInvestigationInput, type InvestigationMode, type InvestigationProgress, type InvestigationSession, type InvestigationSubmission } from './investigation-state';
@@ -34,13 +33,11 @@ export default function InvestigationWorkbench({ initialInput = '', initialMode 
   const running = progress?.status === 'running';
   const stale = snapshot !== null && snapshot.input !== state.input;
   const externalReason = externalDisabledReason(session);
-  const eligible = parsed.valid.filter(isGlobalIp);
-  const selectedEligible = eligible.filter(ip => state.selected.includes(ip));
-  const disabled = running || !parsed.valid.length || parsed.valid.length > 200 || (state.mode === 'external' && (!!externalReason || !selectedEligible.length));
+  const disabled = running || !parsed.valid.length || parsed.valid.length > 200 || (state.mode === 'external' && !!externalReason);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if (disabled) return;
-    const submission: InvestigationSubmission = { ips: state.mode === 'local' ? parsed.valid : selectedEligible, mode: state.mode, cachePolicy: state.mode === 'local' ? 'fresh-first' : cachePolicy, chunkSize: state.mode === 'external' ? 10 : 200 };
+    const submission: InvestigationSubmission = { ips: parsed.valid, mode: state.mode, cachePolicy: state.mode === 'local' ? 'fresh-first' : cachePolicy, chunkSize: state.mode === 'external' ? 10 : 200 };
     const id = ++job.current;
     controller.current?.abort();
     const abort = new AbortController(); controller.current = abort;
@@ -63,17 +60,10 @@ export default function InvestigationWorkbench({ initialInput = '', initialMode 
         {externalReason && <p role="status" className="text-amber-300">{externalReason}</p>}
       </div>}
       <IndicatorInput value={state.input} onChange={input => setState(previous => updateInvestigationInput(previous, input))} disabled={running} />
-      {parsed.valid.length > 0 && <details open={state.mode === 'external'} className="rounded-lg border border-white/10 p-3 text-xs">
-        <summary>Indicator selection: {state.selected.length} selected · {eligible.length} eligible public IPs</summary>
-        <label className="my-3 flex items-center gap-2"><input type="checkbox" aria-label="Select all input indicators" disabled={running} checked={parsed.valid.length > 0 && parsed.valid.every(ip => state.selected.includes(ip))} onChange={e => setState(previous => ({ ...previous, selected: e.target.checked ? parsed.valid : [] }))} />Select all valid input</label>
-        <div className="grid max-h-40 gap-2 overflow-auto sm:grid-cols-3">{parsed.valid.map(ip => <label key={ip} className="flex items-center gap-2 font-mono"><input type="checkbox" aria-label={`Select input ${ip}`} disabled={running} checked={state.selected.includes(ip)} onChange={e => setState(previous => ({ ...previous, selected: e.target.checked ? [...previous.selected, ip] : previous.selected.filter(value => value !== ip) }))} />{ip}{!isGlobalIp(ip) && <span className="text-zinc-500">local only</span>}</label>)}</div>
-        {state.mode === 'external' && <p className="mt-3 text-zinc-400">Only selected globally routable IPs are submitted externally. Non-public indicators remain local-only, not automatically safe.</p>}
-      </details>}
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={disabled} className="rounded-lg border border-white/15 bg-white/10 px-5 py-2 text-sm font-medium hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">{state.mode === 'local' ? 'Search Local' : 'Enrich Selected'}</button>
+        <button type="submit" disabled={disabled} className="rounded-lg border border-white/15 bg-white/10 px-5 py-2 text-sm font-medium hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">{state.mode === 'local' ? 'Search Local' : 'Enrich All'}</button>
         {running && <button type="button" onClick={() => controller.current?.abort()} className="rounded-lg border border-white/15 px-4 py-2 text-sm">Cancel remaining work</button>}
         {!session && <button type="button" className="text-xs text-zinc-400 underline" onClick={() => setSessionAttempt(value => value + 1)}>Retry session permissions</button>}
-        {state.mode === 'external' && !selectedEligible.length && <span className="text-xs text-zinc-400">Select at least one public IP to enrich.</span>}
       </div>
       {error && <p role="alert" className="text-sm text-amber-300">{error}</p>}
     </form>

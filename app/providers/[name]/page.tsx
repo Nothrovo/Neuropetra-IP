@@ -19,6 +19,7 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import DefangButton from '@/components/DefangButton';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import type { IntelRow, ProviderSummary } from '@/lib/db';
 type ProviderPageResponse = { provider: ProviderSummary; ips: IntelRow[]; total: number; limit: number; offset: number; hasMore: boolean; attackTypes: {type: string; count: number}[]; targetHosts: {host: string; count: number}[] };
 const EMPTY_IPS: IntelRow[] = [];
@@ -91,9 +92,11 @@ export default function ProviderDetailPage(props: { params: Promise<{ name: stri
     if (!processedIps.length) return;
     const text = processedIps.map(i => i.ip).join('\n');
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const success = await copyTextToClipboard(text);
+      if (success) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     } catch (err) {
       console.error('Failed to copy to clipboard', err);
     }

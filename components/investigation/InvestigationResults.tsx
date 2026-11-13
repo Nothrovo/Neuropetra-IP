@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -11,10 +11,13 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import {
   exportInvestigationResults,
   investigationFreshness,
+  isLocalIndicator,
   isPersistenceWarning,
+  sortInvestigationResults,
   type InvestigationResult,
 } from './investigation-state';
 
@@ -36,7 +39,8 @@ export default function InvestigationResults({
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState('');
 
-  const exportRows = scope === 'selected' ? results.filter(row => selected.includes(row.ip)) : results;
+  const sortedResults = useMemo(() => sortInvestigationResults(results), [results]);
+  const exportRows = scope === 'selected' ? sortedResults.filter(row => selected.includes(row.ip)) : sortedResults;
   const toggle = (ip: string) =>
     onSelectionChange(selected.includes(ip) ? selected.filter(value => value !== ip) : [...selected, ip]);
 
@@ -47,15 +51,29 @@ export default function InvestigationResults({
     if (exportDisabled) return;
     try {
       const text = exportInvestigationResults(exportRows, targetFormat);
-      await navigator.clipboard.writeText(text);
-      setNotice(`Copied ${label} to clipboard.`);
-      setTimeout(() => setNotice(''), 3000);
+      const success = await copyTextToClipboard(text);
+      if (success) {
+        setNotice(`Copied ${label} to clipboard.`);
+        setTimeout(() => setNotice(''), 3000);
+      } else {
+        setNotice('Clipboard unavailable.');
+      }
     } catch {
       setNotice('Clipboard unavailable.');
     }
   };
 
   const renderVerdictBadge = (row: InvestigationResult) => {
+    if (isLocalIndicator(row)) {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-800/80 px-2 py-0.5 text-xs font-medium text-zinc-400">
+          <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+          <span>Local</span>
+          <span className="sr-only"> / Local</span>
+        </span>
+      );
+    }
+
     const verdict = row.verdict ?? 'Unknown';
     const score = row.compositeScore ?? row.abuseScore;
 
@@ -99,6 +117,9 @@ export default function InvestigationResults({
   };
 
   const renderStatusBadge = (row: InvestigationResult) => {
+    if (isLocalIndicator(row)) {
+      return <span className="rounded bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-400 border border-zinc-700">Local</span>;
+    }
     if (row.found === false) {
       return <span className="rounded bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-400 border border-zinc-700">Local miss</span>;
     }
@@ -201,10 +222,14 @@ export default function InvestigationResults({
             disabled={exportDisabled}
             onClick={async () => {
               try {
-                await navigator.clipboard.writeText(content());
-                setCopied(true);
-                setNotice(`Copied ${format.toUpperCase()} export to clipboard.`);
-                setTimeout(() => setCopied(false), 2000);
+                const success = await copyTextToClipboard(content());
+                if (success) {
+                  setCopied(true);
+                  setNotice(`Copied ${format.toUpperCase()} export to clipboard.`);
+                  setTimeout(() => setCopied(false), 2000);
+                } else {
+                  setNotice('Clipboard unavailable. Use Download instead.');
+                }
               } catch {
                 setNotice('Clipboard unavailable. Use Download instead.');
               }
@@ -229,9 +254,9 @@ export default function InvestigationResults({
                 <input
                   type="checkbox"
                   aria-label="Select all results"
-                  disabled={disabled || !results.length}
-                  checked={results.length > 0 && results.every(row => selected.includes(row.ip))}
-                  onChange={e => onSelectionChange(e.target.checked ? results.map(row => row.ip) : [])}
+                  disabled={disabled || !sortedResults.length}
+                  checked={sortedResults.length > 0 && sortedResults.every(row => selected.includes(row.ip))}
+                  onChange={e => onSelectionChange(e.target.checked ? sortedResults.map(row => row.ip) : [])}
                   className="rounded border-zinc-700 bg-zinc-900 text-indigo-500"
                 />
               </th>
@@ -246,7 +271,7 @@ export default function InvestigationResults({
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.06]">
-            {results.map(row => (
+            {sortedResults.map(row => (
               <tr key={row.ip} className="transition hover:bg-white/[0.02]">
                 <td className="p-3.5">
                   <input
@@ -259,12 +284,19 @@ export default function InvestigationResults({
                   />
                 </td>
                 <td className="p-3.5 font-mono">
-                  <Link
-                    href={`/ip/${encodeURIComponent(row.ip)}`}
-                    className="font-semibold text-indigo-400 hover:text-indigo-300 underline decoration-indigo-400/40 underline-offset-4"
-                  >
-                    {row.ip}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/ip/${encodeURIComponent(row.ip)}`}
+                      className="font-semibold text-indigo-400 hover:text-indigo-300 underline decoration-indigo-400/40 underline-offset-4"
+                    >
+                      {row.ip}
+                    </Link>
+                    {isLocalIndicator(row) && (
+                      <span className="rounded bg-zinc-800/90 px-1.5 py-0.5 text-[10px] font-sans font-medium text-zinc-400 border border-zinc-700/70">
+                        Local
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="p-3.5">{renderStatusBadge(row)}</td>
                 <td className="p-3.5">

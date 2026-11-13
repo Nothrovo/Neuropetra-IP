@@ -40,6 +40,6 @@ describe('unified navigation', () => {
     const next = await InvestigatePage({ searchParams: Promise.resolve({ mode: 'local', ip: '1.1.1.1' }) });
     expect(next.key).not.toBe(page.key);
     const html = renderToStaticMarkup(page);
-    expect(html).toContain('Enrich Selected'); expect(html).toContain('IP indicators');
+    expect(html).toContain('Enrich All'); expect(html).toContain('IP indicators');
   });
 });

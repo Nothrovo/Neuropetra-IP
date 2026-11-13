@@ -18,15 +18,16 @@ describe('rendered investigation workbench', () => {
     expect(html).toContain('zero provider requests');
     expect(html).not.toContain('API Key');
   });
-  it('renders external egress, fresh-first and force-refresh warnings with disabled reason', () => {
+  it('renders external egress, fresh-first and force-refresh warnings with disabled reason and no indicator selection accordion', () => {
     const html = renderToStaticMarkup(<InvestigationWorkbench initialMode="external" initialInput="8.8.8.8" session={{ ...session, permissions: ['read'] }} />);
-    expect(html).toContain('Enrich Selected');
+    expect(html).toContain('Enrich All');
+    expect(html).not.toContain('Indicator selection');
     expect(html).toContain('Reuse fresh cache');
     expect(html).toContain('Force refresh');
     expect(html).toContain('leave this installation');
     expect(html).toContain('permission');
     expect(html).not.toContain('VirusTotal');
-    expect(html).toMatch(/disabled=""[^>]*>Enrich Selected/);
+    expect(html).toMatch(/disabled=""[^>]*>Enrich All/);
   });
   it('shows full input accounting and rejects oversized input visibly rather than truncating', () => {
     const html = renderToStaticMarkup(<IndicatorInput value={'8.8.8.8\n8.8.8.8\nbad'} onChange={noop} disabled={false} />);
@@ -78,5 +79,18 @@ describe('rendered investigation workbench', () => {
     expect(html).toContain('Stale cache');
     expect(html).toContain('Reputation only');
     expect(html).toContain('Freshness unknown');
+  });
+  it('renders malicious indicators at top and labels local indicators as Local at the bottom', () => {
+    const html = renderToStaticMarkup(<InvestigationResults results={[
+      { ip: '10.20.100.117', status: 'private', source: 'local_private', verdict: 'Unknown', compositeScore: 0 },
+      { ip: '1.1.1.1', found: true, verdict: 'Low risk', compositeScore: 10, abuseScore: 10 },
+      { ip: '172.81.132.189', found: true, verdict: 'Malicious', compositeScore: 95, abuseScore: 95 },
+    ]} selected={[]} onSelectionChange={noop} disabled={false} canExport={true} />);
+    const indexMalicious = html.indexOf('172.81.132.189');
+    const indexLowRisk = html.indexOf('1.1.1.1');
+    const indexLocal = html.indexOf('10.20.100.117');
+    expect(indexMalicious).toBeLessThan(indexLowRisk);
+    expect(indexLowRisk).toBeLessThan(indexLocal);
+    expect(html).toContain('>Local</span>');
   });
 });
