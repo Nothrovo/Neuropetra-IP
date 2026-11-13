@@ -98,10 +98,12 @@ export default function InvestigationResults({
     }
 
     if (verdict === 'Low risk') {
+      const isZero = (score === 0 || score == null);
+      const label = isZero ? 'Benign' : 'Low risk';
       return (
         <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-          <span>Low risk ({score != null ? `${score}%` : '0%'})</span>
+          <span>{label} ({score != null ? `${score}%` : '0%'})</span>
           <span className="sr-only"> / {verdict}</span>
         </span>
       );

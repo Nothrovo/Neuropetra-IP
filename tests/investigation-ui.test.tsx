@@ -93,4 +93,10 @@ describe('rendered investigation workbench', () => {
     expect(indexLowRisk).toBeLessThan(indexLocal);
     expect(html).toContain('>Local</span>');
   });
+  it('renders Benign (0%) for zero score low risk indicators', () => {
+    const html = renderToStaticMarkup(<InvestigationResults results={[
+      { ip: '104.22.62.183', found: true, verdict: 'Low risk', compositeScore: 0, abuseScore: 0 },
+    ]} selected={[]} onSelectionChange={noop} disabled={false} canExport={true} />);
+    expect(html).toContain('Benign (0%)');
+  });
 });

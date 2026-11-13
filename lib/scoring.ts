@@ -149,12 +149,9 @@ export function calculateVerdictScore(input: ScoreInput, now: Date = new Date())
   } else if (compositeScore >= 40) {
     verdict = 'Suspicious';
     verdictColor = 'amber';
-  } else if (compositeScore >= 1) {
+  } else {
     verdict = 'Low risk';
     verdictColor = 'emerald';
-  } else {
-    verdict = 'Unknown';
-    verdictColor = 'slate';
   }
 
   return {

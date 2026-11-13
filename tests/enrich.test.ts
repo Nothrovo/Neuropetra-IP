@@ -36,7 +36,8 @@ describe('Live AbuseIPDB Enrichment Engine', () => {
 
     // 0% Clean
     const clean = calculateVerdictScore({ abuseScore: 0 });
-    expect(clean.verdict).toBe('Unknown');
+    expect(clean.verdict).toBe('Low risk');
+    expect(clean.verdictColor).toBe('emerald');
     expect(clean.components.localSignal.rawScore).toBe(0);
   });
 

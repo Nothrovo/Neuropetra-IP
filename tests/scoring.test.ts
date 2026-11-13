@@ -37,8 +37,8 @@ describe('Threat Verdict Scoring Engine', () => {
 
     const zeroRep = calculateVerdictScore({ abuseScore: 0, totalAlertCount: 0 });
     expect(zeroRep.compositeScore).toBe(0);
-    expect(zeroRep.verdict).toBe('Unknown');
-    expect(zeroRep.verdictColor).toBe('slate');
+    expect(zeroRep.verdict).toBe('Low risk');
+    expect(zeroRep.verdictColor).toBe('emerald');
   });
 
   it('should automatically re-normalize weights when VirusTotal is missing', () => {
