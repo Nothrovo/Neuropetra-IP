@@ -121,7 +121,7 @@ export function classifyThreatScore(score: number | string | null | undefined): 
   if (isNaN(num)) return 'Not Enriched';
   if (num >= 70) return 'Malicious / High Risk';
   if (num >= 20) return 'Suspicious / Moderate Risk';
-  if (num === 0) return '0% Reported Abuse Confidence (not a safety verdict)';
+  if (num === 0) return 'Clean / 0% Abuse Confidence';
   return 'Low Reported Abuse Score';
 }
 
@@ -163,17 +163,24 @@ export function resolveEffectiveScore(item: BulkIpItem): {
  */
 export function formatSingleIocRow(
   item: BulkIpItem,
-  options?: { includeActivityContext?: boolean }
+  options?: { includeActivityContext?: boolean; fiveColumn?: boolean }
 ): string {
   const includeActivity = options?.includeActivityContext !== false;
+  const fiveColumn = options?.fiveColumn !== false;
   const ip = markdownCell(item.ip);
 
   // 1. Private / Internal IP Handling
   if (isPrivateIp(item.ip)) {
     const kind = item.ip.includes(':') ? 'Private IPv6 ULA' : 'Private IP RFC1918';
+    if (fiveColumn) {
+      return `| IP | ${ip} | Local Network | N/A | ${kind} [Internal Network Context] |`;
+    }
     return `| IP | ${ip} | Local Network | ${kind} [Internal Network Context] |`;
   }
   if (!isGlobalIp(item.ip)) {
+    if (fiveColumn) {
+      return `| IP | ${ip} | Non-global Network | N/A | Non-global IP [Special-use address; not a safety verdict] |`;
+    }
     return `| IP | ${ip} | Non-global Network | Non-global IP [Special-use address; not a safety verdict] |`;
   }
 
@@ -193,15 +200,26 @@ export function formatSingleIocRow(
 
   // 3. Not Found / Un-enriched Handling
   if (item.found === false) {
+    if (fiveColumn) {
+      return `| IP | ${ip} | ${markdownCell(countryAsn)} | N/A | External Source IP [Reputation Not Enriched] |`;
+    }
     return `| IP | ${ip} | ${markdownCell(countryAsn)} | External Source IP [Reputation Not Enriched] |`;
   }
 
   // 4. Reputation & Threat Intel Scoring
   const { sourceName, scoreVal, scoreStr } = resolveEffectiveScore(item);
   const threatLabel = classifyThreatScore(scoreVal);
-  let desc = `Threat Intel ${sourceName} Score: ${scoreStr} [${threatLabel}]`;
 
-  // 5. Activity Context (Attack Type only; request counts removed per SOC reporting standard)
+  if (fiveColumn) {
+    const abuseCol = scoreVal !== null ? `${scoreStr} [${threatLabel}]` : 'N/A';
+    let desc = scoreVal !== null ? `Threat Intel ${sourceName}: ${threatLabel}` : `Threat Intel ${sourceName}: Not Enriched`;
+    if (includeActivity && item.topAttackType && item.topAttackType !== 'None' && item.topAttackType !== 'Unspecified') {
+      desc += ` (${markdownCell(item.topAttackType)})`;
+    }
+    return `| IP | ${ip} | ${markdownCell(countryAsn)} | ${abuseCol} | ${desc} |`;
+  }
+
+  let desc = `Threat Intel ${sourceName} Score: ${scoreStr} [${threatLabel}]`;
   if (includeActivity && item.topAttackType && item.topAttackType !== 'None' && item.topAttackType !== 'Unspecified') {
     desc += ` (${markdownCell(item.topAttackType)})`;
   }
@@ -224,21 +242,30 @@ export function formatCharlieIocMarkdown(
     reportVariant = 'charlie',
   } = options;
 
-  const footnoteText =
-    reportVariant === 'charlie'
-      ? '| * | Catatan: Validasi reputasi dan geolokasi IP diverifikasi melalui AbuseIPDB, VirusTotal, dan ip-api.com. |'
-      : '| * | Catatan: IP sumber dicatat dari telemetri host internal/sistem; reputasi dan atribut jaringan diverifikasi melalui threat intelligence bila tersedia. |';
+  const isAlpha = reportVariant === 'alpha';
+  const footnoteText = isAlpha
+    ? '| * | Catatan: IP sumber dicatat dari telemetri host internal/sistem; reputasi dan atribut jaringan diverifikasi melalui threat intelligence bila tersedia. |'
+    : '| * | Catatan: Reputasi dan geolokasi ditampilkan dari hasil intelligence check; nilai yang tidak tersedia tetap ditandai N/A. |';
+  const sectionTitle = isAlpha ? '**2. INDICATOR OF COMPROMISE**' : '**2. INDIKATOR KOMPROMI (IOC)**';
+  const tableHeader = isAlpha
+    ? '| Tipe IoC | Nilai | Negara (ASN) | Keterangan |\n| ----- | ----- | ----- | ----- |\n'
+    : '| Tipe IoC | Nilai | Negara (ASN) | AbuseIPDB | Keterangan |\n| ----- | ----- | ----- | ----- | ----- |\n';
+  const emptyIpRow = isAlpha
+    ? '| IP | Tidak ditemukan indicator terkait | N/A | N/A |\n'
+    : '| IP | Tidak ditemukan indicator terkait | N/A | N/A | N/A |\n';
+  const emptyHashRow = isAlpha
+    ? '| Hash | Tidak ditemukan indicator terkait | N/A | N/A |\n'
+    : '| Hash | Tidak ditemukan indicator terkait | N/A | N/A | N/A |\n';
 
   if (!items || items.length === 0) {
     let emptyResult = '';
     if (includeSectionHeader) {
-      emptyResult += '**2. INDICATOR OF COMPROMISE**\n\n';
+      emptyResult += `${sectionTitle}\n\n`;
     }
-    emptyResult += '| Tipe IoC | Nilai | Negara (ASN) | Keterangan |\n';
-    emptyResult += '| ----- | ----- | ----- | ----- |\n';
-    emptyResult += '| IP | Tidak ditemukan indicator terkait | N/A | N/A |\n';
+    emptyResult += tableHeader;
+    emptyResult += emptyIpRow;
     if (includeHashRow) {
-      emptyResult += '| Hash | Tidak ditemukan indicator terkait | N/A | N/A |\n';
+      emptyResult += emptyHashRow;
     }
     if (includeFootnote) {
       emptyResult += `\n${footnoteText}\n`;
@@ -277,25 +304,24 @@ export function formatCharlieIocMarkdown(
   // Build markdown table
   let md = '';
   if (includeSectionHeader) {
-    md += '**2. INDICATOR OF COMPROMISE**\n\n';
+    md += `${sectionTitle}\n\n`;
   }
 
-  md += '| Tipe IoC | Nilai | Negara (ASN) | Keterangan |\n';
-  md += '| ----- | ----- | ----- | ----- |\n';
+  md += tableHeader;
 
   // Add non-private IP rows
   for (const item of nonPrivateList) {
-    md += `${formatSingleIocRow(item, { includeActivityContext })}\n`;
+    md += `${formatSingleIocRow(item, { includeActivityContext, fiveColumn: !isAlpha })}\n`;
   }
 
   // Add private IP rows at the bottom
   for (const item of privateList) {
-    md += `${formatSingleIocRow(item, { includeActivityContext })}\n`;
+    md += `${formatSingleIocRow(item, { includeActivityContext, fiveColumn: !isAlpha })}\n`;
   }
 
   // Hash indicator row
   if (includeHashRow) {
-    md += '| Hash | Tidak ditemukan indicator terkait | N/A | N/A |\n';
+    md += emptyHashRow;
   }
 
   // Footnote note

@@ -21,7 +21,7 @@ describe('Live AbuseIPDB Enrichment Engine', () => {
     // Abuse score classification
     expect(classifyThreatScore(100)).toBe('Malicious / High Risk');
     expect(classifyThreatScore(4)).toBe('Low Reported Abuse Score');
-    expect(classifyThreatScore(0)).toBe('0% Reported Abuse Confidence (not a safety verdict)');
+    expect(classifyThreatScore(0)).toBe('Clean / 0% Abuse Confidence');
 
     // High telemetry malicious verdict
     const mal = calculateVerdictScore({

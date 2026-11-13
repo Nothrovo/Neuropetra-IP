@@ -66,7 +66,7 @@ describe('workbench state and permissions', () => {
     const row = { ip: '8.8.8.8', status: 'enriched', source: 'abuseipdb_live', reputationSource: 'abuseipdb', abuseScore: 98, savedToDb: false, checkedAt: '2026-11-04T12:00:00Z', error: 'Provider result retrieved but reputation persistence failed' };
     for (const format of ['alpha', 'charlie'] as const) {
       const output = exportInvestigationResults([row], format);
-      expect(output).toContain('Score: 98%');
+      expect(output).toContain('98%');
       expect(output).not.toContain('Not Enriched');
       expect(output).toContain('Persistence warning');
       expect(output).toContain('persistence failed');
@@ -88,10 +88,10 @@ describe('workbench state and permissions', () => {
     expect(tsv).toContain('Internet Rakyat');
 
     const mdReport = exportInvestigationResults(rows, 'md');
-    expect(mdReport).toContain('**2. INDICATOR OF COMPROMISE**');
-    expect(mdReport).toContain('| Tipe IoC | Nilai | Negara (ASN) | Keterangan |');
+    expect(mdReport).toContain('**2. INDIKATOR KOMPROMI (IOC)**');
+    expect(mdReport).toContain('| Tipe IoC | Nilai | Negara (ASN) | AbuseIPDB | Keterangan |');
     expect(mdReport).toContain('195.178.110.159');
     expect(mdReport).toContain('Internet Rakyat');
-    expect(mdReport).toContain('Catatan: Validasi reputasi dan geolokasi IP diverifikasi melalui AbuseIPDB');
+    expect(mdReport).toContain('Catatan: Reputasi dan geolokasi ditampilkan dari hasil intelligence check; nilai yang tidak tersedia tetap ditandai N/A.');
   });
 });

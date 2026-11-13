@@ -190,12 +190,16 @@ export function exportInvestigationResults(rows: InvestigationResult[], format: 
   }
   if (format === 'md') {
     const items = normalized.map(row => ({ ...row, countryCode: row.countryCode ?? undefined, compositeScore: undefined, found: row.found }));
-    return formatCharlieIocMarkdown(items, { includeSectionHeader: true, includeFootnote: true }).replaceAll('Threat Intel AbuseIPDB Score: N/A [Not Enriched]', 'Reputation Unknown [Not Enriched]');
+    return formatCharlieIocMarkdown(items, { includeSectionHeader: true, includeFootnote: true })
+      .replaceAll('Threat Intel AbuseIPDB Score: N/A [Not Enriched]', 'Reputation Unknown [Not Enriched]')
+      .replaceAll('Threat Intel AbuseIPDB: Not Enriched', 'Threat Intel AbuseIPDB: Reputation Unknown');
   }
   if (format !== 'csv') {
     const items = normalized.map(row => ({ ...row, countryCode: row.countryCode ?? undefined, compositeScore: undefined, found: row.found }));
     const formatter = format === 'alpha' ? formatAlphaIocMarkdown : formatCharlieIocMarkdown;
-    const summary = formatter(items, { includeFootnote: false }).replaceAll('Threat Intel AbuseIPDB Score: N/A [Not Enriched]', 'Reputation Unknown [Not Enriched]');
+    const summary = formatter(items, { includeFootnote: false })
+      .replaceAll('Threat Intel AbuseIPDB Score: N/A [Not Enriched]', 'Reputation Unknown [Not Enriched]')
+      .replaceAll('Threat Intel AbuseIPDB: Not Enriched', 'Threat Intel AbuseIPDB: Reputation Unknown');
     const evidence = normalized.map(row => {
       const values = row as Record<string, unknown>;
       return `${isPersistenceWarning(row) ? 'Persistence warning: retrieved reputation was not saved.\n\n' : ''}### ${markdownValue(row.ip)} — ${row.found === true ? 'Local evidence' : row.found === false ? 'Local miss' : 'External reputation'}\n\n| Field | Supplied evidence / provenance |\n| ----- | ----- |\n${columns.filter(key => values[key] !== undefined).map(key => `| ${markdownValue(key)} | ${markdownValue(values[key])} |`).join('\n')}`;

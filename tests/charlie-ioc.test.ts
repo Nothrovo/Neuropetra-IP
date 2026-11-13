@@ -22,9 +22,9 @@ describe('Charlie Reporter IoC Formatter', () => {
       expect(classifyThreatScore(69)).toBe('Suspicious / Moderate Risk');
     });
 
-    it('classifies 0 as 0% Reported Abuse Confidence (not a safety verdict)', () => {
-      expect(classifyThreatScore(0)).toBe('0% Reported Abuse Confidence (not a safety verdict)');
-      expect(classifyThreatScore('0')).toBe('0% Reported Abuse Confidence (not a safety verdict)');
+    it('classifies 0 as Clean / 0% Abuse Confidence', () => {
+      expect(classifyThreatScore(0)).toBe('Clean / 0% Abuse Confidence');
+      expect(classifyThreatScore('0')).toBe('Clean / 0% Abuse Confidence');
     });
 
     it('classifies 1-19 as Low Reported Abuse Score', () => {
@@ -42,7 +42,7 @@ describe('Charlie Reporter IoC Formatter', () => {
   it('never attributes a local composite score to a provider', () => {
     for (const reputationSource of ['abuseipdb', 'virustotal']) {
       const row = formatSingleIocRow({ ip: '8.8.8.8', found: true, compositeScore: 99, reputationSource });
-      expect(row).toContain('Score: N/A [Not Enriched]');
+      expect(row).toContain('Not Enriched');
       expect(row).not.toContain('99%');
     }
   });
@@ -77,7 +77,7 @@ describe('Charlie Reporter IoC Formatter', () => {
       };
       const row = formatSingleIocRow(privateItem);
       expect(row).toBe(
-        '| IP | 192.168.1.159 | Local Network | Private IP RFC1918 [Internal Network Context] |'
+        '| IP | 192.168.1.159 | Local Network | N/A | Private IP RFC1918 [Internal Network Context] |'
       );
     });
 
@@ -88,7 +88,7 @@ describe('Charlie Reporter IoC Formatter', () => {
       };
       const row = formatSingleIocRow(unenrichedItem);
       expect(row).toBe(
-        '| IP | 198.51.100.23 | Non-global Network | Non-global IP [Special-use address; not a safety verdict] |'
+        '| IP | 198.51.100.23 | Non-global Network | N/A | Non-global IP [Special-use address; not a safety verdict] |'
       );
     });
 
@@ -105,7 +105,7 @@ describe('Charlie Reporter IoC Formatter', () => {
       };
       const row = formatSingleIocRow(item);
       expect(row).toBe(
-        '| IP | 185.220.101.5 | Germany (AS208294 Tor Network) | Threat Intel AbuseIPDB Score: 100% [Malicious / High Risk] (sql_injection) |'
+        '| IP | 185.220.101.5 | Germany (AS208294 Tor Network) | 100% [Malicious / High Risk] | Threat Intel AbuseIPDB: Malicious / High Risk (sql_injection) |'
       );
     });
 
@@ -121,7 +121,7 @@ describe('Charlie Reporter IoC Formatter', () => {
       };
       const row = formatSingleIocRow(cleanItem);
       expect(row).toBe(
-        '| IP | 1.1.1.1 | Australia (Cloudflare) | Threat Intel AbuseIPDB Score: 0% [0% Reported Abuse Confidence (not a safety verdict)] |'
+        '| IP | 1.1.1.1 | Australia (Cloudflare) | 0% [Clean / 0% Abuse Confidence] | Threat Intel AbuseIPDB: Clean / 0% Abuse Confidence |'
       );
       expect(row).not.toContain('requests');
     });
@@ -139,7 +139,7 @@ describe('Charlie Reporter IoC Formatter', () => {
       };
       const row = formatSingleIocRow(item);
       expect(row).toBe(
-        '| IP | 194.26.29.112 | Netherlands (AS50673 Serverius) | Threat Intel VirusTotal Score: 100% [Malicious / High Risk] (path_traversal) |'
+        '| IP | 194.26.29.112 | Netherlands (AS50673 Serverius) | 100% [Malicious / High Risk] | Threat Intel VirusTotal: Malicious / High Risk (path_traversal) |'
       );
     });
   });
@@ -176,11 +176,11 @@ describe('Charlie Reporter IoC Formatter', () => {
       const md = formatCharlieIocMarkdown(sampleItems);
 
       // Section title check
-      expect(md).toContain('**2. INDICATOR OF COMPROMISE**');
+      expect(md).toContain('**2. INDIKATOR KOMPROMI (IOC)**');
 
       // Table header check
-      expect(md).toContain('| Tipe IoC | Nilai | Negara (ASN) | Keterangan |');
-      expect(md).toContain('| ----- | ----- | ----- | ----- |');
+      expect(md).toContain('| Tipe IoC | Nilai | Negara (ASN) | AbuseIPDB | Keterangan |');
+      expect(md).toContain('| ----- | ----- | ----- | ----- | ----- |');
 
       // Sorting check: 185.220.101.5 (100%) must come before 45.154.255.89 (85%)
       const idx100 = md.indexOf('185.220.101.5');
@@ -194,10 +194,10 @@ describe('Charlie Reporter IoC Formatter', () => {
       expect(idx85).toBeLessThan(idxPriv);
 
       // Hash row check
-      expect(md).toContain('| Hash | Tidak ditemukan indicator terkait | N/A | N/A |');
+      expect(md).toContain('| Hash | Tidak ditemukan indicator terkait | N/A | N/A | N/A |');
 
       // Footnote check
-      expect(md).toContain('Catatan: Validasi reputasi dan geolokasi IP diverifikasi melalui AbuseIPDB, VirusTotal, dan ip-api.com.');
+      expect(md).toContain('Catatan: Reputasi dan geolokasi ditampilkan dari hasil intelligence check; nilai yang tidak tersedia tetap ditandai N/A.');
     });
 
     it('respects options to exclude header, hash, or footnote for table-only copying', () => {
@@ -207,16 +207,16 @@ describe('Charlie Reporter IoC Formatter', () => {
         includeFootnote: false,
       });
 
-      expect(tableOnly).not.toContain('**2. INDICATOR OF COMPROMISE**');
+      expect(tableOnly).not.toContain('**2. INDIKATOR KOMPROMI (IOC)**');
       expect(tableOnly).not.toContain('| Hash |');
       expect(tableOnly).not.toContain('Catatan:');
-      expect(tableOnly.startsWith('| Tipe IoC | Nilai | Negara (ASN) | Keterangan |')).toBe(true);
+      expect(tableOnly.startsWith('| Tipe IoC | Nilai | Negara (ASN) | AbuseIPDB | Keterangan |')).toBe(true);
     });
 
     it('handles empty results list gracefully', () => {
       const emptyMd = formatCharlieIocMarkdown([]);
-      expect(emptyMd).toContain('| IP | Tidak ditemukan indicator terkait | N/A | N/A |');
-      expect(emptyMd).toContain('| Hash | Tidak ditemukan indicator terkait | N/A | N/A |');
+      expect(emptyMd).toContain('| IP | Tidak ditemukan indicator terkait | N/A | N/A | N/A |');
+      expect(emptyMd).toContain('| Hash | Tidak ditemukan indicator terkait | N/A | N/A | N/A |');
     });
 
     it('formats Alpha Reporter IoC variant with Alpha footnote', () => {
