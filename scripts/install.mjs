@@ -16,7 +16,7 @@ try {
  const put=(name,value)=>writeFileSync(join(directory,name),value+'\n',{mode:0o600,flag:'wx'});
  put('postgres-password',random());put('role-passwords.json',JSON.stringify(passwords));
  for(const [scope,password] of Object.entries(passwords))put(`${scope}-database-url`,`postgresql://ip_intel_${scope}_login:${password}@${host}:${port}/${database}`);
- put('compose.env',`IP_INTEL_SECRET_DIR=${directory}\nLOCAL_UID=${process.getuid?.() ?? 1000}\nLOCAL_GID=${process.getgid?.() ?? 1000}`);
+ put('compose.env',`IP_INTEL_SECRET_DIR=${directory}\nLOCAL_UID=${process.getuid?.() ?? 1000}\nLOCAL_GID=${process.getgid?.() ?? 1000}\nAPP_BIND_IP=0.0.0.0`);
  console.log('Installation secrets created with restricted permissions. No secret values are printed.');
  console.log(`Compose requires --env-file ${join(directory,'compose.env')}. Configure APP_ORIGIN separately.`);
 }catch {console.error('Installation failed: invalid options or existing/unwritable secret files. Nothing was overwritten.');process.exitCode=1;}

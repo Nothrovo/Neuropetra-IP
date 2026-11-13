@@ -18,9 +18,9 @@ describe('operator foundation',()=>{
    expect(readFileSync(join(temp,'auth-database-url'),'utf8')).toBe(auth);
   }finally{rmSync(temp,{recursive:true,force:true});}
  });
- it('ships loopback app-only Compose and a private persistent DB overlay, without embedded passwords or privileged app role',()=>{
+ it('ships app-only Compose and a private persistent DB overlay, without embedded passwords or privileged app role',()=>{
   const base=readFileSync('docker-compose.yml','utf8');const overlay=readFileSync('compose.postgres.yml','utf8');
-  expect(base).toContain('127.0.0.1:');expect(base).not.toMatch(/network_mode: host|postgres:/);
+  expect(base).toContain('APP_BIND_IP:-0.0.0.0');expect(base).not.toMatch(/network_mode: host|postgres:/);
   expect(overlay).toContain('postgres:16-alpine');expect(overlay).toContain('pgdata:');
   expect(overlay).not.toMatch(/ports:|POSTGRES_PASSWORD:/);expect(overlay).toContain('POSTGRES_PASSWORD_FILE');
   expect(base).toContain('AUTH_DATABASE_URL_FILE');expect(base).not.toContain('AUTH_PASS');
